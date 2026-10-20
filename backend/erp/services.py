@@ -3,13 +3,19 @@ from pwdlib import PasswordHash
 from pydantic import ValidationError
 from sqlalchemy import delete, select
 
+from .audit import change_summary
+from .business_models import Category
+from .business_schemas import CategoryInput, ClassifiedProductInput, SupplierInput, WarehouseInput
 from .models import Department, Position, Role, SessionToken, User, UserRole
 from .permissions import RESOURCES, Engine
-from .schemas import DepartmentInput, NameInput, ProductInput, UserInput
+from .schemas import DepartmentInput, NameInput, UserInput
 
 PASSWORDS = PasswordHash.recommended()
 INPUTS = {
-    "products": ProductInput,
+    "products": ClassifiedProductInput,
+    "categories": CategoryInput,
+    "suppliers": SupplierInput,
+    "warehouses": WarehouseInput,
     "users": UserInput,
     "departments": DepartmentInput,
     "roles": NameInput,
@@ -65,10 +71,19 @@ def references(db, engine, resource, values, row_id, check_roles=True):
         "owner_id": User,
         "position_id": Position,
         "supervisor_id": User,
-        "parent_id": Department,
+        "parent_id": Category if resource == "categories" else Department,
+        "category_id": Category,
     }.items():
+        if key == "category_id" or (key == "parent_id" and resource == "categories"):
+            continue
         if values.get(key) and db.get(model, values[key]) is None:
             raise HTTPException(422, "invalid_reference")
+    for key, target in (("category_id", "categories"), ("parent_id", "categories")):
+        if values.get(key) and (key == "category_id" or resource == "categories"):
+            row = fetch(db, engine, target, values[key])
+            visible = engine.project(target, data_for(db, target, row))
+            if not visible or visible.get("id") != row.id:
+                raise HTTPException(404, "record_not_found")
     if resource == "users":
         roles = values.get("role_ids", [])
         if len(roles) != len(set(roles)):
@@ -79,8 +94,12 @@ def references(db, engine, resource, values, row_id, check_roles=True):
                 raise HTTPException(422, "invalid_role")
             require(engine.authorize("roles", "assign", data_for(db, "roles", role)))
         parent, cls, attr = values.get("supervisor_id"), User, "supervisor_id"
-    elif resource == "departments":
-        parent, cls, attr = values.get("parent_id"), Department, "parent_id"
+    elif resource in {"departments", "categories"}:
+        parent, cls, attr = (
+            values.get("parent_id"),
+            (Category if resource == "categories" else Department),
+            "parent_id",
+        )
     else:
         return
     seen = {row_id}
@@ -92,13 +111,38 @@ def references(db, engine, resource, values, row_id, check_roles=True):
         parent = getattr(record, attr) if record else None
 
 
-def persist(db, engine: Engine, resource, values, existing=None, changed_fields=None):
+def project_record(db, engine, resource, row):
+    result = engine.project(resource, data_for(db, resource, row))
+    if result is None:
+        return None
+    # Relationship IDs are protected data too; never expose a hidden related record.
+    key = (
+        "category_id"
+        if resource == "products"
+        else "parent_id"
+        if resource == "categories"
+        else None
+    )
+    if key and result.get(key) and result[key] != "***":
+        target = db.get(Category, result[key])
+        visible = (
+            engine.project("categories", data_for(db, "categories", target)) if target else None
+        )
+        if not visible or visible.get("id") != target.id:
+            result.pop(key, None)
+    return result
+
+
+def persist(
+    db, engine: Engine, resource, values, existing=None, changed_fields=None, audit_details=None
+):
     from .models import uid
 
+    before = data_for(db, resource, existing) if existing else None
     checked_fields = values.keys() if changed_fields is None else changed_fields
     row_id = existing.id if existing else uid()
     action = "update" if existing else "create"
-    candidate = {**values, "id": row_id, "version": existing.version if existing else 1}
+    candidate = {**values, "id": row_id, "version": existing.version + 1 if existing else 1}
     if existing:
         require(
             engine.authorize(resource, action, data_for(db, resource, existing)), checked_fields
@@ -130,5 +174,9 @@ def persist(db, engine: Engine, resource, values, existing=None, changed_fields=
         for role_id in values["role_ids"]:
             db.add(UserRole(user_id=row_id, role_id=role_id))
     db.flush()
+    if audit_details is not None:
+        audit_details.update(
+            change_summary(resource, row.id, before, data_for(db, resource, row), checked_fields)
+        )
     # A write-only actor receives no protected record fields in the acknowledgement.
-    return engine.project(resource, data_for(db, resource, row)) or {"saved": True}
+    return project_record(db, engine, resource, row) or {"saved": True}

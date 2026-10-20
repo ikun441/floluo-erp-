@@ -25,7 +25,16 @@ import {
 } from "lucide-react";
 
 type Data = Record<string, unknown>;
-type Resource = "products" | "users" | "departments" | "positions" | "roles";
+type Resource =
+  | "products"
+  | "users"
+  | "departments"
+  | "positions"
+  | "roles"
+  | "categories"
+  | "suppliers"
+  | "warehouses";
+type ResourceSpec = { fields: string[]; actions: string[]; scopes: string[] };
 type Rule = {
   id: string;
   subject: { kind: string; id?: string };
@@ -39,6 +48,9 @@ type Rule = {
   requires_approval?: boolean;
 };
 const labels: Record<Resource, string> = {
+  categories: "商品分类",
+  suppliers: "供应商",
+  warehouses: "仓库",
   products: "商品资料",
   users: "用户管理",
   departments: "部门管理",
@@ -46,7 +58,26 @@ const labels: Record<Resource, string> = {
   roles: "角色管理",
 };
 const fields: Record<Resource, string[]> = {
-  products: ["sku", "name", "unit", "owner_id", "department_id", "active"],
+  products: [
+    "sku",
+    "name",
+    "unit",
+    "category_id",
+    "owner_id",
+    "department_id",
+    "active",
+  ],
+  categories: ["name", "parent_id"],
+  suppliers: [
+    "code",
+    "name",
+    "contact",
+    "phone",
+    "owner_id",
+    "department_id",
+    "active",
+  ],
+  warehouses: ["code", "name", "owner_id", "department_id", "active"],
   users: [
     "username",
     "password",
@@ -63,6 +94,10 @@ const fields: Record<Resource, string[]> = {
 const names: Record<string, string> = {
   id: "标识",
   version: "版本",
+  code: "编码",
+  contact: "联系人",
+  phone: "联系电话",
+  category_id: "商品分类 ID",
   sku: "商品编码",
   name: "名称",
   unit: "单位",
@@ -74,7 +109,7 @@ const names: Record<string, string> = {
   position_id: "岗位 ID",
   supervisor_id: "主管 ID",
   role_ids: "角色 ID（逗号分隔）",
-  parent_id: "上级部门 ID",
+  parent_id: "上级 ID",
 };
 class ApiError extends Error {
   constructor(
@@ -134,6 +169,7 @@ function Editor({
   close: () => void;
 }) {
   const qc = useQueryClient();
+  const currentUser = qc.getQueryData<{ id: string }>(["me"]);
   const [error, setError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -154,7 +190,7 @@ function Editor({
                 .split(",")
                 .map((s) => s.trim())
                 .filter(Boolean)
-            : key.endsWith("_id")
+            : key.endsWith("_id") || ["contact", "phone"].includes(key)
               ? value || null
               : value;
     }
@@ -214,12 +250,19 @@ function Editor({
                   defaultValue={
                     Array.isArray(row?.[key])
                       ? (row[key] as string[]).join(",")
-                      : String(row?.[key] ?? "")
+                      : String(
+                          row?.[key] ??
+                            (key === "owner_id" && !row
+                              ? currentUser?.id
+                              : "") ??
+                            "",
+                        )
                   }
                   required={
                     !key.endsWith("_id") &&
                     key !== "role_ids" &&
-                    !(key === "password" && row)
+                    !(key === "password" && row) &&
+                    !["contact", "phone"].includes(key)
                   }
                   minLength={key === "password" ? 14 : undefined}
                 />
@@ -396,6 +439,10 @@ function Permissions() {
     queryKey: ["policies"],
     queryFn: () => api("/policies"),
   });
+  const catalog = useQuery<Record<string, ResourceSpec>>({
+    queryKey: ["resource_catalog"],
+    queryFn: () => api("/resource_catalog"),
+  });
   const roles = useRecords("roles");
   const [draft, setDraft] = useState<Rule[]>();
   const [error, setError] = useState<unknown>();
@@ -462,7 +509,7 @@ function Permissions() {
           </p>
         </div>
       </div>
-      <ErrorBox error={query.error || error} />
+      <ErrorBox error={query.error || catalog.error || error} />
       <section className="panel">
         <div className="panel-heading">
           <h3>访问策略矩阵</h3>
@@ -551,7 +598,7 @@ function Permissions() {
                     })
                   }
                 >
-                  {[...Object.keys(fields), "policies"].map((v) => (
+                  {Object.keys(catalog.data ?? {}).map((v) => (
                     <option key={v}>{v}</option>
                   ))}
                 </select>
@@ -572,11 +619,9 @@ function Permissions() {
                   value={rule.scope}
                   onChange={(e) => update(i, { scope: e.target.value })}
                 >
-                  {["own", "department", "departments", "records", "all"].map(
-                    (v) => (
-                      <option key={v}>{v}</option>
-                    ),
-                  )}
+                  {(catalog.data?.[rule.resource]?.scopes ?? []).map((v) => (
+                    <option key={v}>{v}</option>
+                  ))}
                 </select>
               </label>
               <label>
@@ -595,12 +640,7 @@ function Permissions() {
               </label>
             </div>
             <div className="actions-row">
-              {(rule.resource === "policies"
-                ? ["read", "publish", "simulate"]
-                : rule.resource === "roles"
-                  ? ["read", "create", "update", "assign"]
-                  : ["read", "create", "update"]
-              ).map((action) => (
+              {(catalog.data?.[rule.resource]?.actions ?? []).map((action) => (
                 <label key={action}>
                   <input
                     type="checkbox"
@@ -628,12 +668,7 @@ function Permissions() {
               </label>
             </div>
             <div className="field-matrix">
-              {[
-                "id",
-                ...(rule.resource === "policies"
-                  ? ["number", "rules"]
-                  : ["version", ...fields[rule.resource as Resource]]),
-              ].map((field) => (
+              {(catalog.data?.[rule.resource]?.fields ?? []).map((field) => (
                 <label key={field}>
                   <span>{names[field] || field}</span>
                   <select
@@ -856,6 +891,9 @@ function Workspace() {
     );
   const nav = [
     { key: "dashboard", label: "工作概览", icon: LayoutDashboard },
+    { key: "categories", label: "商品分类", icon: Box },
+    { key: "suppliers", label: "供应商", icon: Building2 },
+    { key: "warehouses", label: "仓库", icon: Building2 },
     { key: "products", label: "商品资料", icon: Box },
     { key: "users", label: "用户管理", icon: Users },
     { key: "departments", label: "部门管理", icon: Building2 },

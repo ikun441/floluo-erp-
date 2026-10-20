@@ -135,7 +135,17 @@ def product_rule(**overrides):
         "scope": "own",
         "fields": {
             f: "write"
-            for f in ("id", "version", "sku", "name", "unit", "owner_id", "department_id", "active")
+            for f in (
+                "id",
+                "version",
+                "sku",
+                "name",
+                "unit",
+                "owner_id",
+                "department_id",
+                "active",
+                "category_id",
+            )
         },
         **overrides,
     }

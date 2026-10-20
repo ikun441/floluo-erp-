@@ -1,8 +1,8 @@
 # 弗洛洛 ERP · v1.0.0 开发版
 
-面向单一企业的局域网 ERP，采用模块化单体、离线核心业务和统一权限边界。当前完成架构设计及 Phase 1 的可运行基础切片，尚非完整 ERP 正式版。
+面向单一企业的局域网 ERP，采用模块化单体、离线核心业务和统一权限边界。当前已建立架构设计、Phase 1基础及Phase 2采购资料切片，尚非完整 ERP 正式版。
 
-已实现：真实登录与服务端会话、多角色用户和组织管理、默认拒绝的权限引擎、数据范围与字段约束、策略版本发布与模拟、审计链、商品基础资料，以及连接真实 API 的 Next.js 管理界面。登录页包含本地生成的 Three.js 3D 场景与 Motion 动效。
+已实现：真实登录与服务端会话、多角色用户和组织管理、默认拒绝的权限引擎、数据范围与字段约束、策略版本发布与模拟、审计链、商品及分类、供应商、仓库基础资料，以及连接真实 API 的 Next.js 管理界面。登录页包含本地生成的 Three.js 3D 场景与 Motion 动效。
 
 采购/库存闭环、OneBot、产品 AI、审批工作流、销售报表尚未实现；不提供伪成功接口或演示订单。角色 Q 版 Logo 尚待独立制作。
 
@@ -80,5 +80,5 @@ npm run e2e
 ## 项目说明
 
 - [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [权限模型](docs/PERMISSIONS.md)
-- [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
+- [采购设计与当前范围](docs/PROCUREMENT.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
 - [登录设计](docs/LOGIN_DESIGN.md) · [Harness](docs/HARNESS.md) · [实施与验证记录](docs/IMPLEMENTATION.md)

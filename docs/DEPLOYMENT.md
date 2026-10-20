@@ -17,3 +17,9 @@ Redis、Celery 和 outbox 在需要后台任务时随对应模块加入，Phase 
 ## 本机验证范围
 
 本机无 Docker，未执行 docker compose build/up 或备份恢复演练。已通过项目内真实 PostgreSQL 18.4 的迁移、认证、权限、审计和并发测试；这不能替代 Compose 中 PostgreSQL 17 的镜像启动与部署验证。
+
+## 采购资料基础迁移
+
+5a6ef43a4a48为新增迁移，不修改前两份迁移。请先备份并在数据库副本验证升级，再执行alembic upgrade head。迁移不改变旧策略权限；管理员在权限中心明确授权categories、suppliers、warehouses及products.category_id。配置表的币种为空、税模式未配置、独立审批人为true；目前只预留配置，未开放采购业务执行接口。
+
+迁移降级只允许新业务表为空且没有v2审计事件的数据库；运行新应用后通常会产生v2审计，因此不能把downgrade当成通用业务回滚。代码回滚和恢复数据库应使用经过验证的一致性备份方案，恢复演练尚未完成。本变更不声称支持在线无停机迁移。

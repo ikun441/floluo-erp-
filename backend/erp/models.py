@@ -92,6 +92,9 @@ class Throttle(Base):
 
 class Product(Row, Base):
     __tablename__ = "product"
+    category_id: Mapped[str | None] = mapped_column(
+        ForeignKey("category.id", name="fk_product_category_id_category"), index=True
+    )
     sku: Mapped[str] = mapped_column(String(80), unique=True)
     name: Mapped[str] = mapped_column(String(160))
     unit: Mapped[str] = mapped_column(String(30))
@@ -110,3 +113,5 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     previous_hash: Mapped[str] = mapped_column(String(64))
     digest: Mapped[str] = mapped_column(String(64), unique=True)
+    format_version: Mapped[int] = mapped_column(Integer, default=2, server_default="1")
+    details: Mapped[dict | None] = mapped_column(JSON)

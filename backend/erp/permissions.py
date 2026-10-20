@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.orm import Session
 
+from .business_models import Category, Supplier, Warehouse
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -22,7 +23,19 @@ class Resource:
 RESOURCES = {
     "products": Resource(
         Product,
-        frozenset({"id", "version", "sku", "name", "unit", "owner_id", "department_id", "active"}),
+        frozenset(
+            {
+                "id",
+                "version",
+                "sku",
+                "name",
+                "unit",
+                "owner_id",
+                "department_id",
+                "active",
+                "category_id",
+            }
+        ),
         owner_column="owner_id",
         department_column="department_id",
     ),
@@ -57,6 +70,50 @@ RESOURCES = {
         frozenset({"read", "publish", "simulate"}),
     ),
 }
+RESOURCES.update(
+    {
+        "categories": Resource(Category, frozenset({"id", "version", "name", "parent_id"})),
+        "suppliers": Resource(
+            Supplier,
+            frozenset(
+                {
+                    "id",
+                    "version",
+                    "code",
+                    "name",
+                    "contact",
+                    "phone",
+                    "owner_id",
+                    "department_id",
+                    "active",
+                }
+            ),
+            owner_column="owner_id",
+            department_column="department_id",
+        ),
+        "warehouses": Resource(
+            Warehouse,
+            frozenset({"id", "version", "code", "name", "owner_id", "department_id", "active"}),
+            owner_column="owner_id",
+            department_column="department_id",
+        ),
+    }
+)
+
+
+def resource_catalog():
+    return {
+        name: {
+            "fields": sorted(res.fields),
+            "actions": sorted(res.actions),
+            "scopes": ["all", "records"]
+            + (["own"] if res.owner_column else [])
+            + (["department", "departments"] if res.department_column else []),
+        }
+        for name, res in RESOURCES.items()
+    }
+
+
 LEVEL = {"hidden": 0, "masked": 1, "read": 2, "write": 3}
 
 

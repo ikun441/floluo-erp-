@@ -124,3 +124,47 @@ test("no WebGL still supports real authentication", async ({ page }) => {
   await expect(page.locator(".sculpture-failed")).toBeVisible();
   await login(page);
 });
+
+test("catalog records persist through real UI and registry drives policy fields", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  for (const resource of ["商品分类", "供应商", "仓库"]) {
+    await page.getByRole("button", { name: resource, exact: true }).click();
+    await page.getByRole("button", { name: "新建资料", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    const name = resource + "-browser-" + Date.now();
+    await dialog.getByRole("textbox", { name: "名称", exact: true }).fill(name);
+    if (resource !== "商品分类") {
+      await dialog
+        .getByRole("textbox", { name: "编码", exact: true })
+        .fill("browser-" + Date.now());
+      await expect(
+        dialog.getByRole("textbox", { name: "所属用户 ID", exact: true }),
+      ).not.toHaveValue("");
+    }
+    if (resource === "供应商") {
+      await dialog
+        .getByRole("textbox", { name: "联系人", exact: true })
+        .fill("Browser Fixture");
+    }
+    await dialog.getByRole("button", { name: "保存资料", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", { name: resource, exact: true }).click();
+    await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
+  }
+  await page.getByRole("button", { name: "权限中心", exact: true }).click();
+  const supplierRule = page
+    .locator(".rule")
+    .filter({ has: page.locator('input[value="bootstrap-suppliers"]') });
+  await expect(supplierRule.getByText("联系人", { exact: true })).toBeVisible();
+  const categoryRule = page
+    .locator(".rule")
+    .filter({ has: page.locator('input[value="bootstrap-categories"]') });
+  await expect(
+    categoryRule.getByLabel("数据范围").locator('option[value="own"]'),
+  ).toHaveCount(0);
+});

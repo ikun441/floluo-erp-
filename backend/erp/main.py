@@ -15,9 +15,18 @@ from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
 from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
-from .permissions import RESOURCES, Engine, conflicts, subject, validate_rules
+from .permissions import RESOURCES, Engine, conflicts, resource_catalog, subject, validate_rules
 from .schemas import CreateEntity, Login, PatchEntity, Publish, Simulate
-from .services import INPUTS, PASSWORDS, data_for, fetch, persist, require, validate_values
+from .services import (
+    INPUTS,
+    PASSWORDS,
+    data_for,
+    fetch,
+    persist,
+    project_record,
+    require,
+    validate_values,
+)
 
 logger = logging.getLogger("erp")
 DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
@@ -63,6 +72,7 @@ def create_app(settings=None):
                     request.state.trace_id,
                     request.method + " " + request.scope["route"].path,
                     getattr(request.state, "status", 200),
+                    getattr(request.state, "audit_details", None),
                 )
                 db.commit()
             except HTTPException as exc:
@@ -211,6 +221,10 @@ def create_app(settings=None):
         response.delete_cookie("erp_csrf", path="/")
         return {"logged_out": True}
 
+    @app.get("/api/v1/resource_catalog")
+    def catalog(user: User = Depends(authenticated)):
+        return resource_catalog()
+
     @app.get("/api/v1/policies")
     def policies(
         engine: Engine = Depends(authorized_engine),
@@ -318,7 +332,7 @@ def create_app(settings=None):
         if after:
             statement = statement.where(spec.model.id > after)
         rows = db.scalars(statement.order_by(spec.model.id).limit(limit)).all()
-        return {"items": [engine.project(resource, data_for(db, resource, row)) for row in rows]}
+        return {"items": [project_record(db, engine, resource, row) for row in rows]}
 
     @app.get("/api/v1/{resource}/{record_id}")
     def detail(
@@ -329,10 +343,11 @@ def create_app(settings=None):
     ):
         resource_spec(resource)
         row = fetch(db, engine, resource, record_id)
-        return engine.project(resource, data_for(db, resource, row))
+        return project_record(db, engine, resource, row)
 
     @app.post("/api/v1/{resource}")
     def create(
+        request: Request,
         resource: str,
         body: CreateEntity,
         engine: Engine = Depends(authorized_engine),
@@ -340,10 +355,12 @@ def create_app(settings=None):
     ):
         resource_spec(resource)
         values = validate_values(resource, body.data)
-        return persist(db, engine, resource, values)
+        request.state.audit_details = {}
+        return persist(db, engine, resource, values, audit_details=request.state.audit_details)
 
     @app.patch("/api/v1/{resource}/{record_id}")
     def update(
+        request: Request,
         resource: str,
         record_id: str,
         body: PatchEntity,
@@ -378,7 +395,16 @@ def create_app(settings=None):
         require(engine.authorize(resource, "update", {**old, **validation}), changed.keys())
         references(db, engine, resource, validation, row.id, "role_ids" in changed)
         # persist rechecks every submitted field; restrict validation to actual patch keys.
-        return persist(db, engine, resource, {**current, **changed}, row, changed.keys())
+        request.state.audit_details = {}
+        return persist(
+            db,
+            engine,
+            resource,
+            {**current, **changed},
+            row,
+            changed.keys(),
+            request.state.audit_details,
+        )
 
     return app
 
