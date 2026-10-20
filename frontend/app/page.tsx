@@ -1,6 +1,10 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import LoginView from "./components/LoginView";
+import ProcurementView, {
+  StockView,
+  BusinessConfiguration,
+} from "./components/ProcurementView";
 import {
   QueryClient,
   QueryClientProvider,
@@ -111,6 +115,20 @@ const names: Record<string, string> = {
   role_ids: "角色 ID（逗号分隔）",
   parent_id: "上级 ID",
 };
+const errorMessages: Record<string, string> = {
+  business_rules_unconfigured: "请先配置支持币种与税模式",
+  self_approval_denied: "采购单创建人不能审批自己的订单",
+  version_conflict: "记录已更新，请刷新后重试",
+  invalid_or_excess_receipt_quantity:
+    "收货数量超过剩余数量，或明细不属于当前订单",
+  idempotency_payload_conflict: "同一入库请求不能修改内容后重用",
+  line_amount_precision_or_overflow: "行金额必须精确到分且不超过金额上限",
+  order_amount_overflow: "订单总额超过上限",
+  order_not_approved: "当前采购单尚未批准或已完成入库",
+  invalid_order_transition: "当前订单状态不支持此操作",
+  field_write_denied: "当前账号没有部分字段的修改权限",
+  default_deny: "当前账号没有此操作权限",
+};
 class ApiError extends Error {
   constructor(
     message: string,
@@ -139,7 +157,7 @@ async function api(path: string, init?: RequestInit) {
   if (!response.ok)
     throw new ApiError(
       typeof data.detail === "string"
-        ? data.detail
+        ? (errorMessages[data.detail] ?? data.detail)
         : "字段校验失败，请检查输入",
       response.status,
     );
@@ -444,6 +462,7 @@ function Permissions() {
     queryFn: () => api("/resource_catalog"),
   });
   const roles = useRecords("roles");
+  const [simulationResource, setSimulationResource] = useState("products");
   const [draft, setDraft] = useState<Rule[]>();
   const [error, setError] = useState<unknown>();
   const [result, setResult] = useState<Data>();
@@ -726,7 +745,9 @@ function Permissions() {
       <section className="panel padded">
         <span className="eyebrow">POLICY SIMULATOR</span>
         <h2>先验证，再授权。</h2>
-        <p className="muted">输入真实用户和记录，查看统一引擎判定。</p>
+        <p className="muted">
+          模拟真实用户的权限策略。业务状态与独立审批规则仍在执行时校验。
+        </p>
         <form className="simulator" onSubmit={simulate}>
           <div className="form-grid">
             <label>
@@ -735,18 +756,28 @@ function Permissions() {
             </label>
             <label>
               资源
-              <select name="resource">
-                {Object.keys(fields).map((v) => (
+              <select
+                name="resource"
+                value={simulationResource}
+                onChange={(event) => setSimulationResource(event.target.value)}
+              >
+                {Object.keys(catalog.data ?? {}).map((v) => (
                   <option key={v}>{v}</option>
                 ))}
               </select>
             </label>
             <label>
               动作
-              <select name="action">
-                <option>read</option>
-                <option>create</option>
-                <option>update</option>
+              <select
+                name="action"
+                key={simulationResource}
+                defaultValue="read"
+              >
+                {(catalog.data?.[simulationResource]?.actions ?? ["read"]).map(
+                  (action) => (
+                    <option key={action}>{action}</option>
+                  ),
+                )}
               </select>
             </label>
             <label>
@@ -846,7 +877,7 @@ function Dashboard() {
             采购与库存流水 → OneBot → 可选 AI → 审批 → 销售与报表。
           </p>
           <div className="notice compact">
-            此版本为开发基础，尚无采购和库存业务，不展示虚构订单或统计。
+            采购订单、审批与入库已接入真实业务。消息、AI、销售与报表按后续阶段扩展。
           </div>
         </section>
       </div>
@@ -891,6 +922,9 @@ function Workspace() {
     );
   const nav = [
     { key: "dashboard", label: "工作概览", icon: LayoutDashboard },
+    { key: "procurement", label: "采购订单", icon: Box },
+    { key: "stock", label: "库存与入库", icon: Box },
+    { key: "configuration", label: "采购业务规则", icon: ShieldCheck },
     { key: "categories", label: "商品分类", icon: Box },
     { key: "suppliers", label: "供应商", icon: Building2 },
     { key: "warehouses", label: "仓库", icon: Building2 },
@@ -943,7 +977,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.0 · 开发版</small>
+            统一授权，安心协作<small>v1.0.2 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -979,6 +1013,12 @@ function Workspace() {
           <ErrorBox error={error} />
           {page === "dashboard" ? (
             <Dashboard />
+          ) : page === "procurement" ? (
+            <ProcurementView api={api} />
+          ) : page === "stock" ? (
+            <StockView api={api} />
+          ) : page === "configuration" ? (
+            <BusinessConfiguration api={api} />
           ) : page === "policies" ? (
             <Permissions />
           ) : (

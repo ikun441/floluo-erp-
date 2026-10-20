@@ -1,13 +1,13 @@
 # Phase 2 采购与库存闭环（设计）
 
-当前已实现分类、供应商、仓库的API与Web资料管理，并迁移下述基础表。采购单流转、收货、库存和配置接口仍待实现；以下为后续实现契约，不是已完成清单。
+当前已实现分类、供应商、仓库、采购草稿与明细、提交/独立审批/取消、带版本和幂等键的分批入库、库存/流水/收货查询、明确业务规则配置以及相应Web页面。当前不支持通用工作流、退货、冲销、含税与汇率换算。
 
 ## 数据与依赖（先于业务代码建立）
 category → product；supplier → purchase_order → purchase_line → purchase_receipt → receipt_line → stock_movement。
 warehouse + product → inventory_balance（复合唯一）。
 command_execution 以 subject + idempotency key 唯一约束防重复；业务数据、命令记录、流水、余额、审计、outbox 同事务提交。
 
-金额 NUMERIC(18,2)，数量 NUMERIC(18,4)。不使用浮点数，不静默四舍五入：超过精度或行金额不能精确到分则拒绝。订单显式填写币种，提交前必须在系统配置中确认支持币种与无税模式。税率、多币种换算尚未实现。
+金额 NUMERIC(18,2)，数量 NUMERIC(18,4)。不使用浮点数，不静默四舍五入：超过精度或行金额不能精确到分则拒绝。订单显式填写币种，提交、审批和新入库前必须在系统配置中确认支持币种与无税模式。税率、多币种换算尚未实现。
 
 状态：draft → submitted → approved → partially_received → received。draft 可编辑；无收货前可取消；完成收货只能后续通过冲销流程调整，当前不提供物理删除、退货和超收。
 默认需要另一位有审批权限的人员批准，禁止自审批。管理员可以显式配置该规则；无配置时采用安全默认值。
@@ -23,3 +23,5 @@ command_execution 以 subject + idempotency key 唯一约束防重复；业务�
 /purchase_orders/{id}/receive：带Idempotency-Key和订单版本的入库命令。
 /purchase_receipts、inventory_balances、stock_movements：只读受限查询。
 /system_configuration：已授权管理员显式配置业务规则；新增模块不自动扩大现有策略权限。
+
+已成功收货的重放仅回读当前授权下的回执，不执行新入库；业务配置停用不会删除或重写历史流水。

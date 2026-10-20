@@ -27,7 +27,7 @@ def data_for(db, resource, row):
     data = {
         key: getattr(row, key)
         for key in RESOURCES[resource].fields
-        if key not in {"password", "role_ids"}
+        if key not in RESOURCES[resource].virtual_fields | {"password", "role_ids"}
     }
     if resource == "users":
         data["role_ids"] = list(

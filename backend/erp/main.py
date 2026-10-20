@@ -11,11 +11,13 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from . import __version__
 from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
 from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
 from .permissions import RESOURCES, Engine, conflicts, resource_catalog, subject, validate_rules
+from .procurement_api import register as register_procurement
 from .schemas import CreateEntity, Login, PatchEntity, Publish, Simulate
 from .services import (
     INPUTS,
@@ -38,7 +40,7 @@ def utc(value):
 
 def create_app(settings=None):
     settings = settings or Settings()
-    app = FastAPI(title="弗洛洛 ERP", version="1.0.0")
+    app = FastAPI(title="弗洛洛 ERP", version=__version__)
     app.state.engine = make_engine(settings.database_url)
 
     @app.middleware("http")
@@ -58,6 +60,18 @@ def create_app(settings=None):
                 "detail": [
                     {"field": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()
                 ]
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def internal_error(request, exc):
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "internal_error"},
+            headers={
+                "X-Trace-ID": getattr(request.state, "trace_id", str(uuid4())),
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
             },
         )
 
@@ -87,6 +101,18 @@ def create_app(settings=None):
                 )
                 db.commit()
                 raise
+            except RequestValidationError:
+                db.rollback()
+                lock_gate(db)
+                append(
+                    db,
+                    getattr(request.state, "actor", None),
+                    request.state.trace_id,
+                    request.method + " " + request.scope["route"].path,
+                    422,
+                )
+                db.commit()
+                raise
             except IntegrityError:
                 db.rollback()
                 lock_gate(db)
@@ -101,6 +127,21 @@ def create_app(settings=None):
                 raise HTTPException(409, "integrity_conflict") from None
             except Exception:
                 db.rollback()
+                try:
+                    lock_gate(db)
+                    append(
+                        db,
+                        getattr(request.state, "actor", None),
+                        request.state.trace_id,
+                        request.method + " " + request.scope["route"].path,
+                        500,
+                    )
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                    logger.error(
+                        "failure_audit_unavailable", extra={"trace_id": request.state.trace_id}
+                    )
                 logger.error("request_failed", extra={"trace_id": request.state.trace_id})
                 raise
 
@@ -137,7 +178,7 @@ def create_app(settings=None):
 
     @app.get("/health/live")
     def live():
-        return {"status": "ok", "version": "1.0.0"}
+        return {"status": "ok", "version": __version__}
 
     @app.get("/health/ready")
     def ready():
@@ -303,7 +344,7 @@ def create_app(settings=None):
                 "policies", "simulate", {"id": gate.revision_id, "number": engine.revision}
             )
         )
-        if body.resource not in INPUTS or body.action not in RESOURCES[body.resource].actions:
+        if body.resource not in RESOURCES or body.action not in RESOURCES[body.resource].actions:
             raise HTTPException(422, "unsupported_simulation")
         user = db.get(User, body.user_id)
         row = db.get(RESOURCES[body.resource].model, body.record_id)
@@ -312,6 +353,8 @@ def create_app(settings=None):
         return Engine(db, subject(db, user)).authorize(
             body.resource, body.action, data_for(db, body.resource, row)
         )
+
+    register_procurement(app, database, authorized_engine)
 
     # Explicit registry prevents arbitrary table access through the path parameter.
     def resource_spec(resource):
@@ -330,7 +373,9 @@ def create_app(settings=None):
         spec = resource_spec(resource)
         statement = select(spec.model).where(engine.scope(resource, "read"))
         if after:
-            statement = statement.where(spec.model.id > after)
+            statement = statement.where(
+                engine.readable_scope(resource, {"id"}), spec.model.id > after
+            )
         rows = db.scalars(statement.order_by(spec.model.id).limit(limit)).all()
         return {"items": [project_record(db, engine, resource, row) for row in rows]}
 

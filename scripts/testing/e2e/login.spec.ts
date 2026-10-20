@@ -6,13 +6,17 @@ async function open(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "欢迎回来。" })).toBeVisible();
 }
-async function login(page: Page) {
+async function login(
+  page: Page,
+  username = "browser_admin",
+  password = "Browser-fixture-" + "x".repeat(20),
+) {
   await page
     .getByRole("textbox", { name: "工作账号", exact: true })
-    .fill("browser_admin");
+    .fill(username);
   await page
     .getByRole("textbox", { name: "登录密码", exact: true })
-    .fill("Browser-fixture-" + "x".repeat(20));
+    .fill(password);
   await page.getByRole("button", { name: "进入工作空间", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "工作空间，一目了然。" }),
@@ -167,4 +171,144 @@ test("catalog records persist through real UI and registry drives policy fields"
   await expect(
     categoryRule.getByLabel("数据范围").locator('option[value="own"]'),
   ).toHaveCount(0);
+});
+
+test("two real users approve and receive a purchase into inventory", async ({
+  page,
+  browser,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "erp_csrf",
+  )!.value;
+  const headers = { "x-csrf-token": csrf };
+  const identity = await (await page.request.get("/api/v1/auth/me")).json();
+  const admin = await (
+    await page.request.get("/api/v1/users/" + identity.id)
+  ).json();
+  const suffix = String(Date.now());
+  async function create(resource: string, data: Record<string, unknown>) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers,
+      data: { data },
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  const supplier = await create("suppliers", {
+    code: "flow-s-" + suffix,
+    name: "Flow Supplier " + suffix,
+    owner_id: identity.id,
+  });
+  const warehouse = await create("warehouses", {
+    code: "flow-w-" + suffix,
+    name: "Flow Warehouse " + suffix,
+    owner_id: identity.id,
+  });
+  const product = await create("products", {
+    sku: "flow-p-" + suffix,
+    name: "Flow Product " + suffix,
+    unit: "piece",
+    owner_id: identity.id,
+  });
+  const approverName = "approver_" + suffix;
+  const approverPassword = "Browser-approver-" + "x".repeat(20);
+  await create("users", {
+    username: approverName,
+    password: approverPassword,
+    role_ids: admin.role_ids,
+  });
+  await page.getByRole("button", { name: "采购业务规则", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "支持币种（逗号分隔）", exact: true })
+    .fill("CNY");
+  await page.getByLabel("税模式", { exact: true }).selectOption("no_tax");
+  const configuration = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/system_configuration") &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "保存业务规则", exact: true }).click();
+  expect((await configuration).status()).toBe(200);
+  await page.getByRole("button", { name: "采购订单", exact: true }).click();
+  await page.getByRole("button", { name: "新建采购单", exact: true }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByLabel("供应商", { exact: true }).selectOption(supplier.id);
+  await dialog.getByLabel("币种", { exact: true }).fill("CNY");
+  await dialog.getByLabel("商品", { exact: true }).selectOption(product.id);
+  await dialog.getByLabel("数量", { exact: true }).fill("3");
+  await dialog.getByLabel("单价", { exact: true }).fill("20.00");
+  const creating = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/purchase_orders") &&
+      response.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "保存草稿", exact: true }).click();
+  const created = await (await creating).json();
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: created.number })
+    .getByRole("button", { name: "查看采购单", exact: true })
+    .click();
+  await page.getByRole("button", { name: "提交审批", exact: true }).click();
+  await page.getByRole("button", { name: "批准采购单", exact: true }).click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "采购单创建人不能审批自己的订单" }),
+  ).toContainText("采购单创建人不能审批自己的订单");
+  const context = await browser.newContext({
+    baseURL: "http://127.0.0.1:3000",
+  });
+  try {
+    const approver = await context.newPage();
+    await open(approver);
+    await login(approver, approverName, approverPassword);
+    await approver
+      .getByRole("button", { name: "采购订单", exact: true })
+      .click();
+    await approver
+      .getByRole("row")
+      .filter({ hasText: created.number })
+      .getByRole("button", { name: "查看采购单", exact: true })
+      .click();
+    await approver
+      .getByRole("button", { name: "批准采购单", exact: true })
+      .click();
+    await expect(
+      approver.getByRole("button", { name: "登记入库", exact: true }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+  await page.reload();
+  await page.getByRole("button", { name: "采购订单", exact: true }).click();
+  await page
+    .getByRole("row")
+    .filter({ hasText: created.number })
+    .getByRole("button", { name: "查看采购单", exact: true })
+    .click();
+  await page.getByRole("button", { name: "登记入库", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog
+    .getByLabel("入库仓库", { exact: true })
+    .selectOption(warehouse.id);
+  await dialog.getByRole("textbox").fill("3");
+  await dialog.getByRole("button", { name: "确认入库", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText(/状态：已入库/)).toBeVisible();
+  await page.screenshot({
+    path: path.join(root, "output/playwright/purchase-order.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "库存与入库", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "3.0000", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "库存流水", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "purchase_receipt", exact: true }),
+  ).toBeVisible();
 });

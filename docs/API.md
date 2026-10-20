@@ -22,4 +22,25 @@
 
 分类字段name、parent_id；商品新增可空category_id。供应商/仓库字段code、name、owner_id、department_id、active，供应商另有可空contact和phone。写入需要相应字段write权限。关联分类必须可读且ID可见；环形分类关系拒绝。已有策略不会因迁移自动获得新资源或新字段权限。
 
-采购单、入库、库存、业务配置API尚未开放；数据库已预留不代表接口已完成。未知资源保持404。
+采购专用接口如下。未知资源保持404。
+
+## 采购 MVP（已实现）
+
+下列专用接口使用扁平业务命令，不使用资料CRUD的data包装：
+
+| 方法 | 路径 | 功能 |
+| --- | --- | --- |
+| GET/POST | /api/v1/purchase_orders | 受限列表 / 创建草稿 |
+| GET/PATCH | /api/v1/purchase_orders/{id} | 受限详情 / 完整草稿编辑，含version |
+| POST | /api/v1/purchase_orders/{id}/submit | 提交审批，body含version |
+| POST | /api/v1/purchase_orders/{id}/approve | 独立审批，body含version |
+| POST | /api/v1/purchase_orders/{id}/cancel | 未入库单据取消，body含version |
+| POST | /api/v1/purchase_orders/{id}/receive | 采购收货并记库存，必须提供Idempotency-Key |
+| GET | /api/v1/purchase_receipts、inventory_balances、stock_movements | 当前授权下的列表和详情 |
+| GET/PATCH | /api/v1/system_configuration | 当前业务配置 / 按version局部更新values |
+
+采购草稿参数：supplier_id、currency（显式三位大写币种）、note、lines。每行包含product_id、quantity、unit_price；数量和价格使用十进制字符串或整数，拒绝JSON浮点。行金额必须精确到分，不能静默舍入。所有者、部门、单号、状态、总额由服务端决定。PATCH同样要求完整草稿字段和version，且仅draft可编辑。
+
+收货参数：version、warehouse_id、lines；每行line_id必须来自当前订单，quantity不得超过未收数量；每次请求至少一行，不允许重复行ID。Idempotency-Key按当前用户隔离、限制128个可打印ASCII字符。相同键/相同规范化命令重放返回已有收货单，重新授权并使用当前字段投影；不同内容返回409。重试必须保留首次version及其他命令字段。成功写入但缺少读取相关单据的权限时，只返回saved=true；重放无当前权限时拒绝，绝不重复加库存。
+
+库存余额和流水没有创建、修改、删除API。列表上限100，固定ID游标；传入after时仅对ID可读记录分页，防止隐藏ID的游标探测。采购单列表在LIMIT前同时过滤供应商与所有明细商品的可见性；收货和流水进一步检查订单及仓库权限。

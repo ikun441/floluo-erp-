@@ -17,3 +17,11 @@
 采购资料扩展：categories不提供own/department范围；suppliers和warehouses支持所有者与部门范围。字段和动作由认证后的resource_catalog提供。升级不会重写已有策略：授权管理员应在权限中心显式增加新资源规则，并按需要开放products.category_id；创建校验包含schema默认字段，未开放新字段时创建可能被拒绝。初始化新数据库时bootstrap会对当前已注册资源生成明确的数据策略，不存在管理员绕过。
 
 分类关联同时检查目标记录和目标ID的可读性。没有分类ID读取权限时，商品category_id和分类parent_id不会间接泄露该ID。关联写入使用同一事务内的当前策略检查。版本条件同时验证更新前版本和将要保存的新版本。
+
+采购资源已注册：purchase_orders（read/create/update/submit/approve/cancel/receive）、purchase_receipts（read/create）、inventory_balances与stock_movements（read）、system_configuration（read/update）；warehouses新增receive动作。旧策略不自动扩权，升级后请显式配置新规则。
+
+采购单lines、unit_price、line_amount属于登记的虚拟字段，可配置字段权限但不能作为SQL条件。金额条件支持真实NUMERIC列，例如`{"field":"total","op":"gt","value":"5000.00"}`，金额阈值必须为有限十进制字符串或整数。禁止虚拟字段、任意表达式或SQL条件。
+
+读取采购金额时，total、unit_price、line_amount取最严格可见级别并联动投影；任何一项隐藏则全部不返回，任何一项脱敏则全部脱敏，防止反推。创建/编辑订单需要supplier_id、currency、note、lines、unit_price的write权限；派生状态和总额由独立动作与业务规则控制。读关联ID要求对应资源ID也可读。
+
+基础采购审批使用明确状态机和approved_by，不是通用审批工作流。requires_approval=true的策略仍阻止执行，直到后续通用审批回执机制完成；采购状态批准不会自动绕过该标志。模拟器只展示权限决策，业务状态、币种/税规则、自审批限制在服务中另行检查。

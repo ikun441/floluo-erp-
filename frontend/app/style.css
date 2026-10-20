@@ -925,3 +925,39 @@ pre {
     display: none;
   }
 }
+.order-line {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.order-line legend {
+  font-size: 12px;
+  padding: 0 6px;
+}
+.business-form {
+  display: grid;
+  gap: 18px;
+  max-width: 560px;
+}
+.business-form input[type="checkbox"] {
+  width: auto;
+  margin-right: 8px;
+}
+
+.business-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.business-check input[type="checkbox"] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+.sidebar nav {
+  min-height: 0;
+  overflow: auto;
+  align-content: start;
+}

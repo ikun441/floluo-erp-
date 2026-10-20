@@ -2,11 +2,21 @@
 
 import operator
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.orm import Session
 
-from .business_models import Category, Supplier, Warehouse
+from .business_models import (
+    Category,
+    InventoryBalance,
+    PurchaseOrder,
+    PurchaseReceipt,
+    StockMovement,
+    Supplier,
+    SystemConfiguration,
+    Warehouse,
+)
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -18,6 +28,7 @@ class Resource:
     actions: frozenset[str] = frozenset({"read", "create", "update"})
     owner_column: str | None = None
     department_column: str | None = None
+    virtual_fields: frozenset[str] = frozenset()
 
 
 RESOURCES = {
@@ -100,6 +111,124 @@ RESOURCES.update(
     }
 )
 
+RESOURCES.update(
+    {
+        "purchase_orders": Resource(
+            PurchaseOrder,
+            frozenset(
+                {
+                    "id",
+                    "version",
+                    "number",
+                    "supplier_id",
+                    "owner_id",
+                    "department_id",
+                    "currency",
+                    "total",
+                    "status",
+                    "note",
+                    "approved_by",
+                    "lines",
+                    "unit_price",
+                    "line_amount",
+                }
+            ),
+            frozenset({"read", "create", "update", "submit", "approve", "cancel", "receive"}),
+            "owner_id",
+            "department_id",
+            frozenset({"lines", "unit_price", "line_amount"}),
+        ),
+        "purchase_receipts": Resource(
+            PurchaseReceipt,
+            frozenset(
+                {
+                    "id",
+                    "version",
+                    "number",
+                    "order_id",
+                    "warehouse_id",
+                    "owner_id",
+                    "department_id",
+                    "lines",
+                }
+            ),
+            frozenset({"read", "create"}),
+            "owner_id",
+            "department_id",
+            frozenset({"lines"}),
+        ),
+        "inventory_balances": Resource(
+            InventoryBalance,
+            frozenset(
+                {
+                    "id",
+                    "version",
+                    "warehouse_id",
+                    "product_id",
+                    "quantity",
+                    "owner_id",
+                    "department_id",
+                }
+            ),
+            frozenset({"read"}),
+            "owner_id",
+            "department_id",
+        ),
+        "stock_movements": Resource(
+            StockMovement,
+            frozenset(
+                {
+                    "id",
+                    "version",
+                    "warehouse_id",
+                    "product_id",
+                    "quantity",
+                    "kind",
+                    "receipt_line_id",
+                    "owner_id",
+                    "department_id",
+                }
+            ),
+            frozenset({"read"}),
+            "owner_id",
+            "department_id",
+        ),
+        "system_configuration": Resource(
+            SystemConfiguration,
+            frozenset(
+                {"id", "version", "supported_currencies", "tax_mode", "require_separate_approver"}
+            ),
+            frozenset({"read", "update"}),
+            virtual_fields=frozenset(
+                {"supported_currencies", "tax_mode", "require_separate_approver"}
+            ),
+        ),
+    }
+)
+RESOURCES["warehouses"] = Resource(
+    Warehouse,
+    RESOURCES["warehouses"].fields,
+    frozenset({"read", "create", "update", "receive"}),
+    "owner_id",
+    "department_id",
+)
+
+
+def condition_value(column, value):
+    if column.type.python_type is Decimal:
+        if type(value) not in {str, int}:
+            raise ValueError("decimal conditions require strings or integers")
+        try:
+            result = Decimal(value)
+        except InvalidOperation:
+            raise ValueError("invalid decimal condition") from None
+        if not result.is_finite():
+            raise ValueError("nonfinite decimal condition")
+        return result
+    if type(value) is not column.type.python_type:
+        raise ValueError("condition value type does not match field")
+    return value
+
 
 def resource_catalog():
     return {
@@ -146,13 +275,17 @@ def validate_rules(rules: list[Rule]):
         if rule.scope in {"departments", "records"} and not rule.scope_ids:
             raise ValueError("explicit scope ids required")
         for c in rule.conditions:
-            if c.field not in resource.fields or c.field in {"password", "role_ids", "rules"}:
+            if c.field not in resource.fields or c.field in resource.virtual_fields | {
+                "password",
+                "role_ids",
+                "rules",
+            }:
                 raise ValueError("unsupported condition field")
             column = getattr(resource.model, c.field)
             python_type = column.type.python_type
             values = c.value if isinstance(c.value, list) else [c.value]
-            if any(type(v) is not python_type for v in values):
-                raise ValueError("condition value type does not match field")
+            for value in values:
+                condition_value(column, value)
             if python_type is bool and c.op not in {"eq", "in"}:
                 raise ValueError("boolean ordering is not supported")
         if rule.fields.get("password", "hidden") in {"masked", "read"}:
@@ -224,7 +357,7 @@ class Engine:
         for c in rule.conditions:
             column = getattr(model, c.field)
             if c.op == "in":
-                conditions.append(column.in_(c.value))
+                conditions.append(column.in_([condition_value(column, v) for v in c.value]))
             else:
                 operation = {
                     "eq": operator.eq,
@@ -233,7 +366,7 @@ class Engine:
                     "gt": operator.gt,
                     "gte": operator.ge,
                 }[c.op]
-                conditions.append(operation(column, c.value))
+                conditions.append(operation(column, condition_value(column, c.value)))
         return func.coalesce(and_(scope, *conditions), false())
 
     def scope(self, resource, action):
@@ -241,6 +374,15 @@ class Engine:
         allows = [self.predicate(r) for r in rules if r.effect == "allow"]
         denies = [self.predicate(r) for r in rules if r.effect == "deny"]
         return and_(or_(*allows) if allows else false(), not_(or_(*denies)) if denies else true())
+
+    def readable_scope(self, resource, fields):
+        restrictive = [
+            self.predicate(rule)
+            for rule in self.applicable(resource, "read")
+            if rule.effect == "allow"
+            and any(rule.fields.get(field, "hidden") not in {"read", "write"} for field in fields)
+        ]
+        return self.scope(resource, "read") & (not_(or_(*restrictive)) if restrictive else true())
 
     def _matches_data(self, rule, data):
         # Evaluate the same SQL predicate against bound candidate data, avoiding Python/SQL drift.

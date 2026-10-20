@@ -6,7 +6,7 @@ from .models import Gate
 
 def make_engine(url):
     options = {"check_same_thread": False, "timeout": 30} if url.startswith("sqlite") else {}
-    engine = create_engine(url, connect_args=options, pool_pre_ping=True)
+    engine = create_engine(url, connect_args=options, pool_pre_ping=True, hide_parameters=True)
     if engine.dialect.name == "sqlite":
 
         @event.listens_for(engine, "connect")

@@ -170,7 +170,7 @@ def test_registry_requires_auth_and_new_resources_require_explicit_policy(env):
     assert TestClient(env["app"]).get("/api/v1/resource_catalog").status_code == 401
     admin, alice = env["client"](), env["client"]("alice")
     catalog = admin.get("/api/v1/resource_catalog").json()
-    assert catalog["warehouses"]["actions"] == ["create", "read", "update"]
+    assert catalog["warehouses"]["actions"] == ["create", "read", "receive", "update"]
     assert "own" not in catalog["categories"]["scopes"]
     assert "category_id" in catalog["products"]["fields"]
     assert alice.get("/api/v1/suppliers").json() == {"items": []}
@@ -183,7 +183,7 @@ def test_registry_requires_auth_and_new_resources_require_explicit_policy(env):
         == 403
     )
     assert post(admin, "/api/v1/inventory_balances", {"data": {"quantity": 10}}).status_code == 404
-    assert post(admin, "/api/v1/purchase_orders", {"data": {}}).status_code == 404
+    assert post(admin, "/api/v1/purchase_orders", {"data": {}}).status_code == 422
 
 
 def test_audit_summaries_are_bound_to_hash_and_redact_sensitive_values(env):
