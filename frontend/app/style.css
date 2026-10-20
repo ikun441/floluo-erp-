@@ -454,7 +454,7 @@ td {
   min-height: 32px;
   color: var(--accent);
 }
-.panel-.content footer {
+.panel-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -901,7 +901,7 @@ pre {
   .panel-heading > .muted {
     display: none;
   }
-  .panel-.content footer {
+  .panel-footer {
     align-items: flex-start;
     flex-direction: column;
     padding: 18px;

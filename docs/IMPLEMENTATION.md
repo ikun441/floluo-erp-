@@ -43,3 +43,7 @@ Docker镜像与Compose启动、局域网TLS、生产应用角色最小权限、�
 ## 待确认业务规则
 
 币种、税率、价格精度；负库存（未确认时拒绝）；超收与退货；审批金额阈值（未配置时拒绝高风险操作）；部门跨层级范围（默认仅直接部门）；成本与财务字段（默认隐藏）；群聊敏感信息（默认不返回）。
+
+## Final verification supplement
+
+Final browser regression: 4 passed (9.3s). Harness produced 8 catalog validation cases after one corrected attempt. Its missing final newline was rejected by the patch reviewer; Codex took over canonical JSON serialization after full data review and actual ProductInput validation. The 8 parameterized boundary checks passed separately. The database suite was rerun before these cases were admitted: 38 passed, 2 SQLite-only concurrency skips. Final frontend build passed. No Docker deployment or GitHub push is claimed.

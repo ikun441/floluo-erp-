@@ -1,1 +1,74 @@
-[]
+[
+  {
+    "id": "valid-english-name",
+    "input": {
+      "sku": "SKU-1001",
+      "name": "Wireless Mouse",
+      "unit": "pcs"
+    },
+    "valid": true
+  },
+  {
+    "id": "valid-chinese-name",
+    "input": {
+      "sku": "SKU-1002",
+      "name": "无线鼠标",
+      "unit": "件"
+    },
+    "valid": true
+  },
+  {
+    "id": "valid-leading-zero-sku",
+    "input": {
+      "sku": "000123",
+      "name": "Keyboard",
+      "unit": "pcs"
+    },
+    "valid": true
+  },
+  {
+    "id": "valid-unit-length-30",
+    "input": {
+      "sku": "SKU-1004",
+      "name": "Cable Organizer",
+      "unit": "abcdefghijklmnopqrstuvwxyz1234"
+    },
+    "valid": true
+  },
+  {
+    "id": "invalid-empty-sku",
+    "input": {
+      "sku": "",
+      "name": "Mechanical Keyboard",
+      "unit": "pcs"
+    },
+    "valid": false
+  },
+  {
+    "id": "invalid-empty-name",
+    "input": {
+      "sku": "SKU-2002",
+      "name": "",
+      "unit": "pcs"
+    },
+    "valid": false
+  },
+  {
+    "id": "invalid-sku-length-81",
+    "input": {
+      "sku": "SKU-ABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFGABCDEFG",
+      "name": "Monitor",
+      "unit": "pcs"
+    },
+    "valid": false
+  },
+  {
+    "id": "invalid-unit-length-31",
+    "input": {
+      "sku": "SKU-2004",
+      "name": "Desk Lamp",
+      "unit": "abcdefghijklmnopqrstuvwxyz12345"
+    },
+    "valid": false
+  }
+]
