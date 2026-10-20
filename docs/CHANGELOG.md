@@ -1,5 +1,11 @@
 # Changelog
 
+## 后续开发（基于v1.0.2，尚未发布）
+
+- 新增独立OneBot固定命令解析与V11消息事件规范化基础；不接收非文本消息段，校验bot实例标识，生成稳定事件键和payload摘要。
+- 当前仅解析，不连接OneBot、不绑定账号、不持久化去重、不授权或执行ERP操作；README与OneBot文档记录了范围。
+- 当前环境SQLite全套回归74 passed、4 skipped；新增OneBot定向用例11 passed；Ruff通过。此工作仍在feature/onebot-foundation分支，尚未创建新版本标签。
+
 ## 1.0.2 — 开发快照（2026-10-20）
 
 - 完成采购MVP：真实草稿/明细、显式提交、独立审批、未收货取消、分批入库、库存余额/流水和收货查询，Web与API共用业务服务。
