@@ -1,0 +1,10 @@
+[
+  {"id":"inventory_query","text":"/erp 库存 查询 mouse","valid":true,"missing":[]},
+  {"id":"purchase_query","text":"/erp 采购 查询","valid":true,"missing":[]},
+  {"id":"purchase_new_missing_config","text":"/erp 采购 新增 商品=mouse 数量=20 单价=35","valid":true,"missing":["supplier","currency"]},
+  {"id":"purchase_new_complete","text":"/erp 采购 新增 商品=\"wireless mouse\" 数量=2 单价=10.50 供应商=example 币种=CNY","valid":true,"missing":[]},
+  {"id":"duplicate_quantity","text":"/erp 采购 新增 商品=mouse 数量=1 数量=2 单价=35 供应商=example 币种=CNY","valid":false,"missing":[]},
+  {"id":"negative_quantity","text":"/erp 采购 新增 商品=mouse 数量=-1 单价=35 供应商=example 币种=CNY","valid":false,"missing":[]},
+  {"id":"unknown_key","text":"/erp 采购 新增 商品=mouse 数量=1 单价=35 用户=admin 供应商=example 币种=CNY","valid":false,"missing":[]},
+  {"id":"unsupported_sql","text":"/erp SQL 查询 SELECT","valid":false,"missing":[]}
+]
