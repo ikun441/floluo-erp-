@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite*
+node_modules/
+.next/
+coverage/
+.dsh-jobs/
+.DS_Store

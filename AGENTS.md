@@ -1,0 +1,11 @@
+# 弗洛洛 ERP 开发约定
+版本 1.0.0，当前为分阶段开发，不能把未完成功能当作正式发布。
+
+- 模块化单体。transport → application services → authorization/domain → repositories。OneBot/AI 禁止直接访问数据库。
+- 默认拒绝，显式拒绝优先；身份只由服务端会话/已验证平台绑定解析。所有列表、详情、写入、统计、导出使用同一权限引擎。
+- 策略使用白名单 AST，不允许 eval、任意 SQL、任意代码；权限版本不可变。所有写入事务先锁 authorization_gate，再读取权限与资源；锁顺序固定。
+- 模型修改必须有独立 Alembic 迁移；禁止修改已发布迁移。金额 Decimal/NUMERIC，时间 UTC/timestamptz，库存仅通过流水变动。
+- 后端 pytest，前端 typecheck/build；权限跨角色、字段、拒绝冲突、失效、CSRF、会话撤销必须真实运行。PostgreSQL 并发不能用 SQLite 测试替代。
+- Codex 完成架构、安全、迁移和核心业务。Harness 仅低风险任务，必须通过隔离运行、差异审查、可信测试；禁止继承桌面凭据或使用未审查模型命令。
+- 不提交 .env、令牌、数据库、凭据、运行日志。无默认管理员密码，无 AI 必需依赖。用户提供的密钥不得回显。
+- 每阶段更新 CHANGELOG、IMPLEMENTATION、测试结果和待确认事项。未实现 API 不返回伪成功。
