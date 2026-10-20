@@ -1,22 +1,21 @@
 import hmac
 import logging
 import secrets
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from pydantic import ValidationError
 from sqlalchemy import select, text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
 from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
-from .permissions import Engine, RESOURCES, conflicts, subject, validate_rules
+from .permissions import RESOURCES, Engine, conflicts, subject, validate_rules
 from .schemas import CreateEntity, Login, PatchEntity, Publish, Simulate
 from .services import INPUTS, PASSWORDS, data_for, fetch, persist, require, validate_values
 
@@ -25,7 +24,7 @@ DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
 
 
 def utc(value):
-    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value
 
 
 def create_app(settings=None):
@@ -44,28 +43,50 @@ def create_app(settings=None):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
-        return JSONResponse(status_code=422, content={"detail": [{"field": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()]})
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": [
+                    {"field": ".".join(map(str, e["loc"])), "type": e["type"]} for e in exc.errors()
+                ]
+            },
+        )
 
     def database(request: Request):
         with Session(app.state.engine, expire_on_commit=False) as db:
             try:
                 lock_gate(db)
                 yield db
-                append(db, getattr(request.state, "actor", None), request.state.trace_id,
-                       request.method + " " + request.scope["route"].path, getattr(request.state, "status", 200))
+                append(
+                    db,
+                    getattr(request.state, "actor", None),
+                    request.state.trace_id,
+                    request.method + " " + request.scope["route"].path,
+                    getattr(request.state, "status", 200),
+                )
                 db.commit()
             except HTTPException as exc:
                 db.rollback()
                 lock_gate(db)
-                append(db, getattr(request.state, "actor", None), request.state.trace_id,
-                       request.method + " " + request.scope["route"].path, exc.status_code)
+                append(
+                    db,
+                    getattr(request.state, "actor", None),
+                    request.state.trace_id,
+                    request.method + " " + request.scope["route"].path,
+                    exc.status_code,
+                )
                 db.commit()
                 raise
             except IntegrityError:
                 db.rollback()
                 lock_gate(db)
-                append(db, getattr(request.state, "actor", None), request.state.trace_id,
-                       request.method + " " + request.scope["route"].path, 409)
+                append(
+                    db,
+                    getattr(request.state, "actor", None),
+                    request.state.trace_id,
+                    request.method + " " + request.scope["route"].path,
+                    409,
+                )
                 db.commit()
                 raise HTTPException(409, "integrity_conflict") from None
             except Exception:
@@ -91,11 +112,17 @@ def create_app(settings=None):
             origin(request)
             header = request.headers.get("x-csrf-token", "")
             cookie = request.cookies.get("erp_csrf", "")
-            if not header or not hmac.compare_digest(header, cookie) or not hmac.compare_digest(digest(header), token.csrf_digest):
+            if (
+                not header
+                or not hmac.compare_digest(header, cookie)
+                or not hmac.compare_digest(digest(header), token.csrf_digest)
+            ):
                 raise HTTPException(403, "csrf_denied")
         return user
 
-    def authorized_engine(db: Session = Depends(database, scope="function"), user: User = Depends(authenticated)):
+    def authorized_engine(
+        db: Session = Depends(database, scope="function"), user: User = Depends(authenticated)
+    ):
         return Engine(db, subject(db, user))
 
     @app.get("/health/live")
@@ -110,11 +137,16 @@ def create_app(settings=None):
                 if db.get(Gate, 1) is None:
                     raise RuntimeError()
             return {"status": "ok"}
-        except Exception:
+        except (SQLAlchemyError, RuntimeError):
             return JSONResponse(status_code=503, content={"status": "not_ready"})
 
     @app.post("/api/v1/auth/login")
-    def login(body: Login, request: Request, response: Response, db: Session = Depends(database, scope="function")):
+    def login(
+        body: Login,
+        request: Request,
+        response: Response,
+        db: Session = Depends(database, scope="function"),
+    ):
         origin(request)
         time = now()
         key = digest(request.client.host if request.client else "unknown")
@@ -147,12 +179,25 @@ def create_app(settings=None):
             prior = db.get(SessionToken, digest(old))
             if prior and prior.user_id == user.id:
                 prior.revoked = True
-        db.add(SessionToken(digest=digest(raw), csrf_digest=digest(csrf), user_id=user.id,
-                            expires_at=time + timedelta(minutes=settings.session_minutes)))
+        db.add(
+            SessionToken(
+                digest=digest(raw),
+                csrf_digest=digest(csrf),
+                user_id=user.id,
+                expires_at=time + timedelta(minutes=settings.session_minutes),
+            )
+        )
         request.state.actor = user.id
         for name, value, httponly in [("erp_session", raw, True), ("erp_csrf", csrf, False)]:
-            response.set_cookie(name, value, httponly=httponly, secure=settings.secure_cookies,
-                                samesite="strict", max_age=settings.session_minutes * 60, path="/")
+            response.set_cookie(
+                name,
+                value,
+                httponly=httponly,
+                secure=settings.secure_cookies,
+                samesite="strict",
+                max_age=settings.session_minutes * 60,
+                path="/",
+            )
         return {"user_id": user.id}
 
     @app.get("/api/v1/auth/me")
@@ -167,19 +212,41 @@ def create_app(settings=None):
         return {"logged_out": True}
 
     @app.get("/api/v1/policies")
-    def policies(engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def policies(
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         gate = db.get(Gate, 1)
         rev = db.get(PolicyRevision, gate.revision_id) if gate.revision_id else None
-        candidate = {"id": rev.id if rev else "", "number": engine.revision, "rules": rev.rules if rev else []}
+        candidate = {
+            "id": rev.id if rev else "",
+            "number": engine.revision,
+            "rules": rev.rules if rev else [],
+        }
         require(engine.authorize("policies", "read", candidate))
         projected = engine.project("policies", candidate)
         return projected
 
     @app.post("/api/v1/policies/publish")
-    def publish(body: Publish, user: User = Depends(authenticated), engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def publish(
+        body: Publish,
+        user: User = Depends(authenticated),
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         gate = db.get(Gate, 1)
         current = db.get(PolicyRevision, gate.revision_id) if gate.revision_id else None
-        require(engine.authorize("policies", "publish", {"id": current.id if current else "", "number": engine.revision, "rules": current.rules if current else []}))
+        require(
+            engine.authorize(
+                "policies",
+                "publish",
+                {
+                    "id": current.id if current else "",
+                    "number": engine.revision,
+                    "rules": current.rules if current else [],
+                },
+            )
+        )
         if engine.revision != body.expected_revision:
             raise HTTPException(409, "policy_revision_conflict")
         try:
@@ -188,31 +255,49 @@ def create_app(settings=None):
             raise HTTPException(422, "invalid_policy") from None
         # JSON policy references are checked before publication, not accepted as arbitrary IDs.
         from .models import Department, Role
+
         for rule in body.rules:
             cls = {"user": User, "role": Role, "department": Department}.get(rule.subject.kind)
             if cls and db.get(cls, rule.subject.id) is None:
                 raise HTTPException(422, "invalid_policy_subject")
-            scope_cls = Department if rule.scope == "departments" else RESOURCES[rule.resource].model
-            if rule.scope in {"departments", "records"} and any(db.get(scope_cls, i) is None for i in rule.scope_ids):
+            scope_cls = (
+                Department if rule.scope == "departments" else RESOURCES[rule.resource].model
+            )
+            if rule.scope in {"departments", "records"} and any(
+                db.get(scope_cls, i) is None for i in rule.scope_ids
+            ):
                 raise HTTPException(422, "invalid_scope_reference")
-        revision = PolicyRevision(number=engine.revision + 1, author_id=user.id,
-                                  rules=[r.model_dump() for r in body.rules])
+        revision = PolicyRevision(
+            number=engine.revision + 1,
+            author_id=user.id,
+            rules=[r.model_dump() for r in body.rules],
+        )
         db.add(revision)
         db.flush()
         gate.revision_id = revision.id
         return {"revision": revision.number, "conflicts": conflicts(body.rules)}
 
     @app.post("/api/v1/policies/simulate")
-    def simulate(body: Simulate, engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def simulate(
+        body: Simulate,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         gate = db.get(Gate, 1)
-        require(engine.authorize("policies", "simulate", {"id": gate.revision_id, "number": engine.revision}))
+        require(
+            engine.authorize(
+                "policies", "simulate", {"id": gate.revision_id, "number": engine.revision}
+            )
+        )
         if body.resource not in INPUTS or body.action not in RESOURCES[body.resource].actions:
             raise HTTPException(422, "unsupported_simulation")
         user = db.get(User, body.user_id)
         row = db.get(RESOURCES[body.resource].model, body.record_id)
         if user is None or row is None:
             raise HTTPException(404, "record_not_found")
-        return Engine(db, subject(db, user)).authorize(body.resource, body.action, data_for(db, body.resource, row))
+        return Engine(db, subject(db, user)).authorize(
+            body.resource, body.action, data_for(db, body.resource, row)
+        )
 
     # Explicit registry prevents arbitrary table access through the path parameter.
     def resource_spec(resource):
@@ -221,8 +306,13 @@ def create_app(settings=None):
         return RESOURCES[resource]
 
     @app.get("/api/v1/{resource}")
-    def listing(resource: str, limit: int = Query(50, ge=1, le=100), after: str | None = None,
-                engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def listing(
+        resource: str,
+        limit: int = Query(50, ge=1, le=100),
+        after: str | None = None,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         spec = resource_spec(resource)
         statement = select(spec.model).where(engine.scope(resource, "read"))
         if after:
@@ -231,19 +321,35 @@ def create_app(settings=None):
         return {"items": [engine.project(resource, data_for(db, resource, row)) for row in rows]}
 
     @app.get("/api/v1/{resource}/{record_id}")
-    def detail(resource: str, record_id: str, engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def detail(
+        resource: str,
+        record_id: str,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         resource_spec(resource)
         row = fetch(db, engine, resource, record_id)
         return engine.project(resource, data_for(db, resource, row))
 
     @app.post("/api/v1/{resource}")
-    def create(resource: str, body: CreateEntity, engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def create(
+        resource: str,
+        body: CreateEntity,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         resource_spec(resource)
         values = validate_values(resource, body.data)
         return persist(db, engine, resource, values)
 
     @app.patch("/api/v1/{resource}/{record_id}")
-    def update(resource: str, record_id: str, body: PatchEntity, engine: Engine = Depends(authorized_engine), db: Session = Depends(database, scope="function")):
+    def update(
+        resource: str,
+        record_id: str,
+        body: PatchEntity,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
         resource_spec(resource)
         row = fetch(db, engine, resource, record_id, "update")
         if row.version != body.version:
@@ -256,7 +362,10 @@ def create_app(settings=None):
             if not set(body.data) <= set(schema):
                 raise HTTPException(422, "unknown_field")
             partial = {**current, **body.data}
-            validation = validate_values(resource, {**partial, "password": body.data.get("password", "validation-placeholder-only")})
+            validation = validate_values(
+                resource,
+                {**partial, "password": body.data.get("password", "validation-placeholder-only")},
+            )
             if "password" not in body.data:
                 validation.pop("password")
         else:
@@ -264,6 +373,7 @@ def create_app(settings=None):
         # Check changed fields, but evaluate conditions against complete old/new candidates.
         changed = {k: v for k, v in validation.items() if k in body.data}
         from .services import references
+
         require(engine.authorize(resource, "update", old), changed.keys())
         require(engine.authorize(resource, "update", {**old, **validation}), changed.keys())
         references(db, engine, resource, validation, row.id, "role_ids" in changed)

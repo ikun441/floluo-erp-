@@ -1,25 +1,84 @@
 # 弗洛洛 ERP · v1.0.0 开发版
 
-单企业、局域网、离线核心业务、模块化单体。项目正在分阶段开发，不是完整 ERP 正式版。
+面向单一企业的局域网 ERP，采用模块化单体、离线核心业务和统一权限边界。当前完成架构设计及 Phase 1 的可运行基础切片，尚非完整 ERP 正式版。
 
-## 本地后端
+已实现：真实登录与服务端会话、多角色用户和组织管理、默认拒绝的权限引擎、数据范围与字段约束、策略版本发布与模拟、审计链、商品基础资料，以及连接真实 API 的 Next.js 管理界面。登录页包含本地生成的 Three.js 3D 场景与 Motion 动效。
+
+采购/库存闭环、OneBot、产品 AI、审批工作流、销售报表尚未实现；不提供伪成功接口或演示订单。角色 Q 版 Logo 尚待独立制作。
+
+## Docker Compose
+
+需要 Docker Compose。默认配置仅绑定本机，尚未在本开发机进行容器启动验证。
 
 ```sh
-uv sync --extra dev
+python3 scripts/init_env.py
+docker compose up --build -d
+docker compose exec backend python -m erp.bootstrap --username admin
+```
+
+初始化脚本生成随机数据库密码，已有 .env 不覆盖。管理员密码通过终端交互输入，至少14字符，无默认账号密码。访问 http://127.0.0.1:8080 。局域网部署前配置 TLS、准确的 APP_ORIGIN 与 Secure Cookie，参见 [部署文档](docs/DEPLOYMENT.md)。
+
+## 本地开发
+
+Python 3.12+（本机实际使用3.13），Node.js 24+，PostgreSQL。
+
+```sh
+uv sync --frozen --extra dev
+```
+
+创建仅本机可读的 .env，设置 DATABASE_URL、APP_ORIGIN=http://127.0.0.1:3000；仅本机 HTTP 开发可设置 SECURE_COOKIES=false。然后：
+
+```sh
 uv run alembic upgrade head
 uv run python -m erp.bootstrap --username admin
-uv run uvicorn erp.main:app --host 127.0.0.1 --port 8000
+uv run uvicorn erp.main:app --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
-先配置 DATABASE_URL（PostgreSQL）。初始化通过交互式密码输入，不通过命令行传递密码。开发测试可显式设置 SQLite URL，但不能替代 PostgreSQL 集成验证。
+另开终端：
 
 ```sh
-uv run pytest
 cd frontend
 npm ci
-npm run typecheck
 npm run build
-npm run dev
+npm start
 ```
 
-测试状态、交付边界与阻塞见 [实施记录](docs/IMPLEMENTATION.md)。系统设计见 [架构](docs/ARCHITECTURE.md)、[数据库](docs/DATABASE.md)、[权限](docs/PERMISSIONS.md)。
+前端默认连接 http://127.0.0.1:8000 。AI 和消息服务不参与这些启动步骤。
+
+## 验证
+
+```sh
+uv run pytest -q
+uv run ruff check backend tests scripts
+uv run ruff format --check backend tests scripts
+cd frontend
+npm run typecheck
+npm run format:check
+npm run build
+```
+
+真实 PostgreSQL 测试采用项目内独立临时集群，不安装系统服务：
+
+```sh
+cd scripts/testing
+npm ci
+npm run postgres
+```
+
+若 npm 提示阻止 @embedded-postgres 平台包 postinstall，先审查其 hydrate-symlinks.js，再按 npm 提示批准该包初始化；本机已审查并执行 darwin-arm64 包的库链接恢复。该测试工具参考 [embedded-postgres](https://github.com/leinelissen/embedded-postgres)，与生产部署无关。
+
+浏览器测试会自行启动独立临时数据库与本机后端；请先构建前端，并确保3000/8000端口空闲：
+
+```sh
+cd scripts/testing
+npx playwright install chromium
+npm run e2e
+```
+
+测试专用固定口令仅存在于独立的回环测试数据库，生产 bootstrap 不使用它。运行目录和浏览器产物位于忽略提交的 .test-runtime/ 与 output/。
+
+## 项目说明
+
+- [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [权限模型](docs/PERMISSIONS.md)
+- [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
+- [登录设计](docs/LOGIN_DESIGN.md) · [Harness](docs/HARNESS.md) · [实施与验证记录](docs/IMPLEMENTATION.md)

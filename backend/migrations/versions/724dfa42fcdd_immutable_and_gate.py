@@ -1,6 +1,7 @@
 """Initialize authorization gate and protect append-only records."""
-from alembic import op
+
 import sqlalchemy as sa
+from alembic import op
 
 revision = "724dfa42fcdd"
 down_revision = "613ceb31ebcc"
@@ -15,12 +16,18 @@ def upgrade():
         op.execute("""CREATE FUNCTION erp_reject_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN RAISE EXCEPTION 'append-only record'; END; $$""")
         for table in ("audit_event", "policy_revision"):
-            op.execute(f"CREATE TRIGGER {table}_immutable BEFORE UPDATE OR DELETE ON {table} FOR EACH ROW EXECUTE FUNCTION erp_reject_mutation()")
-            op.execute(f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION erp_reject_mutation()")
+            op.execute(
+                f"CREATE TRIGGER {table}_immutable BEFORE UPDATE OR DELETE ON {table} FOR EACH ROW EXECUTE FUNCTION erp_reject_mutation()"
+            )
+            op.execute(
+                f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} FOR EACH STATEMENT EXECUTE FUNCTION erp_reject_mutation()"
+            )
     elif dialect == "sqlite":
         for table in ("audit_event", "policy_revision"):
             for action in ("UPDATE", "DELETE"):
-                op.execute(f"CREATE TRIGGER {table}_{action.lower()}_guard BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'append-only record'); END")
+                op.execute(
+                    f"CREATE TRIGGER {table}_{action.lower()}_guard BEFORE {action} ON {table} BEGIN SELECT RAISE(ABORT, 'append-only record'); END"
+                )
 
 
 def downgrade():

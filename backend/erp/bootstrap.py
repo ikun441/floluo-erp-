@@ -1,11 +1,13 @@
 import argparse
 from getpass import getpass
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
 from .audit import append
 from .config import Settings
 from .database import lock_gate, make_engine
-from .models import Gate, PolicyRevision, Role, User, UserRole, uid
+from .models import PolicyRevision, Role, User, UserRole, uid
 from .permissions import RESOURCES
 from .schemas import UserInput
 from .services import PASSWORDS
@@ -21,10 +23,18 @@ def initialize(db, username, password):
     db.add_all([user, role])
     db.flush()
     db.add(UserRole(user_id=user.id, role_id=role.id))
-    rules = [{"id": "bootstrap-" + name, "subject": {"kind": "role", "id": role.id}, "effect": "allow",
-              "resource": name, "actions": sorted(res.actions), "scope": "all",
-              "fields": {field: "write" for field in res.fields}}
-             for name, res in RESOURCES.items()]
+    rules = [
+        {
+            "id": "bootstrap-" + name,
+            "subject": {"kind": "role", "id": role.id},
+            "effect": "allow",
+            "resource": name,
+            "actions": sorted(res.actions),
+            "scope": "all",
+            "fields": {field: "write" for field in res.fields},
+        }
+        for name, res in RESOURCES.items()
+    ]
     revision = PolicyRevision(id=uid(), number=1, author_id=user.id, rules=rules)
     db.add(revision)
     db.flush()

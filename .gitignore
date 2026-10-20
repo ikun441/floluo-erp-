@@ -13,3 +13,7 @@ node_modules/
 coverage/
 .dsh-jobs/
 .DS_Store
+*.tsbuildinfo
+.test-runtime/
+output/
+.playwright-cli/

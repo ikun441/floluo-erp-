@@ -1,7 +1,11 @@
 """A small typed policy language compiled to bound SQL expressions, never evaluated code."""
+
+import operator
 from dataclasses import dataclass
-from sqlalchemy import and_, false, not_, or_, select, true
+
+from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.orm import Session
+
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -16,12 +20,42 @@ class Resource:
 
 
 RESOURCES = {
-    "products": Resource(Product, frozenset({"id", "version", "sku", "name", "unit", "owner_id", "department_id", "active"}), owner_column="owner_id", department_column="department_id"),
-    "users": Resource(User, frozenset({"id", "version", "username", "department_id", "position_id", "supervisor_id", "active", "role_ids", "password"}), owner_column="id", department_column="department_id"),
+    "products": Resource(
+        Product,
+        frozenset({"id", "version", "sku", "name", "unit", "owner_id", "department_id", "active"}),
+        owner_column="owner_id",
+        department_column="department_id",
+    ),
+    "users": Resource(
+        User,
+        frozenset(
+            {
+                "id",
+                "version",
+                "username",
+                "department_id",
+                "position_id",
+                "supervisor_id",
+                "active",
+                "role_ids",
+                "password",
+            }
+        ),
+        owner_column="id",
+        department_column="department_id",
+    ),
     "departments": Resource(Department, frozenset({"id", "version", "name", "parent_id"})),
     "positions": Resource(Position, frozenset({"id", "version", "name"})),
-    "roles": Resource(Role, frozenset({"id", "version", "name"}), frozenset({"read", "create", "update", "assign"})),
-    "policies": Resource(PolicyRevision, frozenset({"id", "number", "rules"}), frozenset({"read", "publish", "simulate"})),
+    "roles": Resource(
+        Role,
+        frozenset({"id", "version", "name"}),
+        frozenset({"read", "create", "update", "assign"}),
+    ),
+    "policies": Resource(
+        PolicyRevision,
+        frozenset({"id", "number", "rules"}),
+        frozenset({"read", "publish", "simulate"}),
+    ),
 }
 LEVEL = {"hidden": 0, "masked": 1, "read": 2, "write": 3}
 
@@ -69,9 +103,13 @@ def validate_rules(rules: list[Rule]):
 
 
 def conflicts(rules: list[Rule]):
-    return [{"allow": a.id, "deny": b.id, "reason": "potential overlap; explicit deny takes priority"}
-            for a in rules if a.effect == "allow"
-            for b in rules if b.effect == "deny" and a.resource == b.resource and set(a.actions) & set(b.actions)]
+    return [
+        {"allow": a.id, "deny": b.id, "reason": "potential overlap; explicit deny takes priority"}
+        for a in rules
+        if a.effect == "allow"
+        for b in rules
+        if b.effect == "deny" and a.resource == b.resource and set(a.actions) & set(b.actions)
+    ]
 
 
 class Engine:
@@ -84,13 +122,30 @@ class Engine:
         validate_rules(self.rules)
 
     def applicable(self, resource, action):
-        if not self.who.active or resource not in RESOURCES or action not in RESOURCES[resource].actions:
+        if (
+            not self.who.active
+            or resource not in RESOURCES
+            or action not in RESOURCES[resource].actions
+        ):
             return []
+
         def matches(s):
-            return (s.kind == "all" or s.kind == "user" and s.id == self.who.id
-                    or s.kind == "role" and s.id in self.who.roles
-                    or s.kind == "department" and self.who.department_id is not None and s.id == self.who.department_id)
-        return [r for r in self.rules if r.resource == resource and action in r.actions and matches(r.subject)]
+            return (
+                s.kind == "all"
+                or s.kind == "user"
+                and s.id == self.who.id
+                or s.kind == "role"
+                and s.id in self.who.roles
+                or s.kind == "department"
+                and self.who.department_id is not None
+                and s.id == self.who.department_id
+            )
+
+        return [
+            r
+            for r in self.rules
+            if r.resource == resource and action in r.actions and matches(r.subject)
+        ]
 
     def predicate(self, rule):
         res = RESOURCES[rule.resource]
@@ -99,7 +154,11 @@ class Engine:
         if rule.scope == "own":
             scope = getattr(model, res.owner_column) == self.who.id
         elif rule.scope == "department":
-            scope = false() if self.who.department_id is None else getattr(model, res.department_column) == self.who.department_id
+            scope = (
+                false()
+                if self.who.department_id is None
+                else getattr(model, res.department_column) == self.who.department_id
+            )
         elif rule.scope == "departments":
             scope = getattr(model, res.department_column).in_(rule.scope_ids)
         elif rule.scope == "records":
@@ -107,10 +166,18 @@ class Engine:
         conditions = []
         for c in rule.conditions:
             column = getattr(model, c.field)
-            conditions.append({"eq": lambda: column == c.value, "in": lambda: column.in_(c.value),
-                "lt": lambda: column < c.value, "lte": lambda: column <= c.value,
-                "gt": lambda: column > c.value, "gte": lambda: column >= c.value}[c.op]())
-        return and_(scope, *conditions)
+            if c.op == "in":
+                conditions.append(column.in_(c.value))
+            else:
+                operation = {
+                    "eq": operator.eq,
+                    "lt": operator.lt,
+                    "lte": operator.le,
+                    "gt": operator.gt,
+                    "gte": operator.ge,
+                }[c.op]
+                conditions.append(operation(column, c.value))
+        return func.coalesce(and_(scope, *conditions), false())
 
     def scope(self, resource, action):
         rules = self.applicable(resource, action)
@@ -122,11 +189,14 @@ class Engine:
         # Evaluate the same SQL predicate against bound candidate data, avoiding Python/SQL drift.
         from sqlalchemy import literal, select
         from sqlalchemy.sql import visitors
+
         model = RESOURCES[rule.resource].model
+
         def replace(node):
             if getattr(node, "table", None) is model.__table__:
                 return literal(data.get(node.name), type_=node.type)
             return None
+
         expression = visitors.replacement_traverse(self.predicate(rule), {}, replace)
         return self.db.scalar(select(expression)) is True
 
@@ -135,16 +205,30 @@ class Engine:
         allows = [r for r in matching if r.effect == "allow"]
         denied = any(r.effect == "deny" for r in matching)
         allowed = bool(allows) and not denied
-        fields = {f: min((r.fields.get(f, "hidden") for r in allows), key=LEVEL.get)
-                  for f in RESOURCES[resource].fields} if allowed else {}
-        return {"allowed": allowed, "reason": "explicit_deny" if denied else "allowed" if allowed else "default_deny",
-                "scope": [r.scope for r in allows], "fields": fields,
-                "requires_approval": any(r.requires_approval for r in allows),
-                "policy_ids": [r.id for r in matching], "revision": self.revision}
+        fields = (
+            {
+                f: min((r.fields.get(f, "hidden") for r in allows), key=LEVEL.get)
+                for f in RESOURCES[resource].fields
+            }
+            if allowed
+            else {}
+        )
+        return {
+            "allowed": allowed,
+            "reason": "explicit_deny" if denied else "allowed" if allowed else "default_deny",
+            "scope": [r.scope for r in allows],
+            "fields": fields,
+            "requires_approval": any(r.requires_approval for r in allows),
+            "policy_ids": [r.id for r in matching],
+            "revision": self.revision,
+        }
 
     def project(self, resource, data):
         decision = self.authorize(resource, "read", data)
         if not decision["allowed"]:
             return None
-        return {k: "***" if decision["fields"][k] == "masked" else v for k, v in data.items()
-                if k != "password" and decision["fields"].get(k, "hidden") != "hidden"}
+        return {
+            k: "***" if decision["fields"][k] == "masked" else v
+            for k, v in data.items()
+            if k != "password" and decision["fields"].get(k, "hidden") != "hidden"
+        }
