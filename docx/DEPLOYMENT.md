@@ -1,5 +1,7 @@
 # 部署与恢复
 
+[文档导航](README.md) · [版本日志](version.md)
+
 ## 当前 Compose 基础
 
 Linux / Docker Compose：Nginx → Next.js / FastAPI → PostgreSQL 持久化卷。只暴露 Nginx；数据库和后端没有宿主端口映射。migrate 服务成功完成后启动后端，再经健康检查启动前端。管理员通过独立交互式 CLI 初始化，服务启动不自动创建管理员或业务数据。

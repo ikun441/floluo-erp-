@@ -1,5 +1,7 @@
 # 技术架构（Phase 0）
 
+[文档导航](README.md) · [版本日志](version.md)
+
 ## 部署与模块边界
 
 Linux / Nginx → Next.js Web、FastAPI REST / WebSocket → 统一应用服务 → 权限决策 + 业务领域 → SQLAlchemy / PostgreSQL。

@@ -1,5 +1,7 @@
 # 统一权限引擎
 
+[文档导航](README.md) · [版本日志](version.md)
+
 接口 authorize(subject, action, resource, context) 返回 allowed、reason、scope、fields、requires_approval、policy_ids、revision。
 
 1. 主体由已验证会话读取 user、department、roles；不接受请求中的角色冒充身份。管理员也只依赖已配置策略，无代码内 superuser 分支。

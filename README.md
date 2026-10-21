@@ -2,19 +2,22 @@
 
 <img src="frontend/public/brand/floluo-logo.png" alt="弗洛洛 ERP Logo" width="144" height="144">
 
-面向单一企业的局域网 ERP，采用模块化单体、离线核心业务和统一权限边界。当前已建立架构设计、Phase 1基础及Phase 2采购MVP闭环，尚非完整 ERP 正式版。
+面向单一企业局域网的 ERP，采用模块化单体、离线核心业务和统一权限边界。当前为 **v1.0.6 开发版**，已接入真实数据库与业务 API。
 
-已实现：真实登录与服务端会话、多角色用户和组织管理、默认拒绝的权限引擎、数据范围与字段约束、策略版本发布与模拟、审计链、商品及分类、供应商、仓库基础资料，以及连接真实 API 的 Next.js 管理界面。登录页包含本地生成的 Three.js 3D 场景与 Motion 动效。
+[文档导航](docx/README.md) · [版本日志](docx/version.md) · [当前进度与验收范围](docx/IMPLEMENTATION.md) · [部署说明](docx/DEPLOYMENT.md)
 
-采购已支持草稿、独立审批、分批入库及库存流水。OneBot 已支持反向 Universal WebSocket、密码复核的单次账号绑定、持久化去重，以及复用权限引擎的采购/库存私聊查询。新增操作工作台：消息/Web均可发起采购请求、补充和取消，Web预览并复核密码后创建真实草稿；请求10分钟过期，确认检查当前权限、摘要与资料/绑定版本。正向WebSocket和AI尚未实现。通用审批工作流、销售报表也尚未实现；不提供伪成功接口或演示订单。项目 Logo 使用用户提供的 Q 版原图，详见 [品牌资源](docs/BRANDING.md)。
+| 模块           | 当前能力                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| 身份与权限     | 登录、会话、组织、多角色、数据范围、字段约束、条件规则、策略模拟与审计 |
+| 基础资料       | 商品、分类、供应商、客户、仓库的受权限控制管理                         |
+| 采购与库存     | 草稿、独立审批、分批入库、库存余额与流水                               |
+| 客户与销售     | 多行草稿、编辑、提交、独立审批、取消与状态筛选                         |
+| 消息与离线交互 | OneBot 反向连接、绑定、去重、离线解析、采购请求确认、回复与连接监控    |
+| Web 管理       | 登录 3D 动效、业务表单、权限中心及桌面/手机布局                        |
 
-v1.0.5新增：操作工作台与已绑定私聊支持离线中文规则，识别库存查询和单商品采购描述；仍须显式预览/确认，不猜填币种、不做单位换算、不自动调用AI。用法见 [离线交互](docs/INTERACTION.md)，实际验证见 [版本日志](docx/version.md)。
+首次提交采购或销售审批前，管理员需在「业务规则配置」明确币种和税模式。已有安装需显式授权新增资源；销售创建人始终不能自批。销售出库、库存预留/扣减、AI、通用审批与报表仍在后续计划中，具体边界见 [销售说明](docx/SALES.md) 和 [实施记录](docx/IMPLEMENTATION.md)。
 
-消息接入页新增真实连接与回复监控。回复与收件箱同事务入队，断线重连后按当前权限重新生成，最多尝试3次并跟踪API回执；不会再次执行采购命令。旧角色须显式授权监控资源，详见 [回复投递](docs/DELIVERY.md)。
-
-v1.0.6新增客户资料与销售订单页面：真实建单、草稿编辑、状态筛选、提交、独立审批与取消；金额和关联资料沿用统一权限。销售出库、库存预留和扣减将在后续切片实现，当前销售审批不会变动库存。详见 [销售设计与边界](docs/SALES.md)。
-
-首次使用采购/销售前，需由已授权管理员在Web「业务规则配置」明确支持币种和税模式；默认未配置时拒绝提交。采购审批人默认须与创建人不同，销售始终要求独立审批。已有安装需显式授权新customers/sales_orders资源，不自动扩张旧角色。
+项目 Logo 使用用户提供的 Q 版原图，详见 [品牌资源](docx/BRANDING.md)。
 
 ## Docker Compose
 
@@ -26,7 +29,7 @@ docker compose up --build -d
 docker compose exec backend python -m erp.bootstrap --username admin
 ```
 
-初始化脚本生成随机数据库密码，已有 .env 不覆盖。管理员密码通过终端交互输入，至少14字符，无默认账号密码。访问 http://127.0.0.1:8080 。局域网部署前配置 TLS、准确的 APP_ORIGIN 与 Secure Cookie，参见 [部署文档](docs/DEPLOYMENT.md)。
+初始化脚本生成随机数据库密码，已有 .env 不覆盖。管理员密码通过终端交互输入，至少14字符，无默认账号密码。访问 http://127.0.0.1:8080 。局域网部署前配置 TLS、准确的 APP_ORIGIN 与 Secure Cookie，参见 [部署文档](docx/DEPLOYMENT.md)。
 
 ## 本地开发
 
@@ -87,10 +90,14 @@ npm run e2e
 
 测试专用固定口令仅存在于独立的回环测试数据库，生产 bootstrap 不使用它。运行目录和浏览器产物位于忽略提交的 .test-runtime/ 与 output/。
 
-## 项目说明
+## 文档入口
 
-版本更新日志统一维护在 [docx/version.md](docx/version.md)。
+所有设计、业务、运维和开发文档统一放在 **[docx/](docx/README.md)**。
 
-- [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [权限模型](docs/PERMISSIONS.md)
-- [操作工作台](docs/OPERATIONS.md) · [采购设计与当前范围](docs/PROCUREMENT.md) · [客户与销售](docs/SALES.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
-- [登录设计](docs/LOGIN_DESIGN.md) · [Harness](docs/HARNESS.md) · [实施与验证记录](docs/IMPLEMENTATION.md)
+| 想了解的内容               | 从这里开始                                                       |
+| -------------------------- | ---------------------------------------------------------------- |
+| 部署、升级与恢复           | [部署说明](docx/DEPLOYMENT.md)                                   |
+| 已实现功能、验证与后续目标 | [实施记录](docx/IMPLEMENTATION.md) · [版本日志](docx/version.md) |
+| 采购、销售、消息等业务流程 | [业务文档导航](docx/README.md#business)                          |
+| 架构、数据库、API 与安全   | [开发文档导航](docx/README.md#development)                       |
+| 后续会话的开发规范         | [AGENTS.md](AGENTS.md)                                           |

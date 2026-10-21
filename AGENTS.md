@@ -1,4 +1,5 @@
 # 弗洛洛 ERP 开发约定
+
 版本 1.0.6，当前为分阶段开发，不能把未完成功能当作正式发布。
 
 - 模块化单体。transport → application services → authorization/domain → repositories。OneBot/AI 禁止直接访问数据库。
@@ -8,7 +9,7 @@
 - 后端 pytest，前端 typecheck/build；权限跨角色、字段、拒绝冲突、失效、CSRF、会话撤销必须真实运行。PostgreSQL 并发不能用 SQLite 测试替代。
 - Codex 完成架构、安全、迁移和核心业务。Harness 仅低风险任务，必须通过隔离运行、差异审查、可信测试；禁止继承桌面凭据或使用未审查模型命令。
 - 不提交 .env、令牌、数据库、凭据、运行日志。无默认管理员密码，无 AI 必需依赖。用户提供的密钥不得回显。
-- 每阶段更新 CHANGELOG、IMPLEMENTATION、测试结果和待确认事项。未实现 API 不返回伪成功。
+- 每阶段更新 docx/version.md、docx/IMPLEMENTATION.md、测试结果和待确认事项。未实现 API 不返回伪成功。
 
 - 自v1.0.4起版本更新日志统一维护在docx/version.md。预览不得创建业务记录；确认需重查请求版本/参数摘要/引用资料版本/当前权限和平台绑定版本，仅创建草稿。
 
@@ -17,3 +18,5 @@
 - 回复队列只保存受限recipe，每次尝试重新检查当前绑定/权限，不能重放业务命令。连接UUID与租约必须同时校验；旧连接不能续租/确认/关闭新连接。不宣称OneBot发送恰好一次。
 
 - 客户/销售与采购共享order_support的受限引用、配置、金额常量和outbox工具。销售创建归属仅取当前主体；创建人始终不能自批。销售列表在分页前过滤客户及全部商品，金额关联字段按最严策略投影。当前销售审批不产生库存变动，出库需新迁移与单独验收。
+
+- 项目设计、业务、运维与开发文档统一放在docx/，导航入口为docx/README.md，唯一版本日志为docx/version.md；根目录README.md与AGENTS.md保留项目入口和开发约定，避免再次拆分文档目录。

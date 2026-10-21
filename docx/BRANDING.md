@@ -1,5 +1,7 @@
 # 项目 Logo
 
+[文档导航](README.md) · [版本日志](version.md)
+
 2026-10-21由用户提供并授权同步本项目的原始PNG，位于 `frontend/public/brand/floluo-logo.png`。1254×1254、RGBA，保留原内容、透明度和比例，没有裁切、重绘或改字。
 
 原图SHA-256：`e5d4849440da2b79a881f898946a93cc95767d4e1c65c949d2866bf8ffb47eda`。

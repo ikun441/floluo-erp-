@@ -1,5 +1,7 @@
 # OneBot连接租约与可靠回复（v1.0.5已实现）
 
+[文档导航](README.md) · [版本日志](version.md)
+
 ## 数据关系与边界
 
 业务消息、不可变MessageInbox和MessageDelivery在同一authorization_gate事务提交。Delivery.event_key唯一外键指向Inbox；instance_id指向OneBotInstance，owner_id可空指向ERP用户，binding_id/版本成对保存平台绑定快照。重放只查收件箱，不再执行业务或再建Delivery。

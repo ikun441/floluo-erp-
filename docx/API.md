@@ -1,5 +1,7 @@
 # API 规范
 
+[文档导航](README.md) · [版本日志](version.md)
+
 /api/v1 前缀；FastAPI /openapi.json 为已实现接口的准确契约。未实现模块不注册伪接口。
 认证使用 HttpOnly 会话 Cookie；GET /auth/me 返回当前用户；修改请求要求 X-CSRF-Token 与 csrf Cookie 配对并匹配会话摘要。登录接口校验 Origin（如提供）。凭据不放 localStorage。
 

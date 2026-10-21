@@ -1,5 +1,7 @@
 # 客户与销售订单（v1.0.6 开发切片）
 
+[文档导航](README.md) · [版本日志](version.md)
+
 ## 边界与依赖
 
 Web SalesView → sales_api → sales application service → 同一权限引擎/authorization_gate → PostgreSQL。客户资料复用受保护通用目录 API。协议入口将来只调用应用服务；当前 OneBot/离线解析不新增销售操作。AI 关闭时可完成全部已交付功能。

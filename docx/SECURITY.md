@@ -1,5 +1,7 @@
 # 安全边界
 
+[文档导航](README.md) · [版本日志](version.md)
+
 Argon2id 密码、随机服务端会话、token/CSRF 仅存摘要、即时用户禁用与会话撤销。失败登录按来源限流并按账号锁定，所有入口通用。
 Cookie 默认 Secure/HttpOnly/SameSite=strict；局域网生产部署 TLS。开发模式显式关闭 Secure 时仅供本机。禁止通配 CORS，写请求校验 Origin 和 CSRF。
 
