@@ -961,3 +961,15 @@ pre {
   overflow: auto;
   align-content: start;
 }
+
+.brand-mark.logo-mark {
+  background: transparent;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+.product-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}

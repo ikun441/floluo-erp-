@@ -1,10 +1,15 @@
 # Changelog
 
-## 后续开发（基于v1.0.2，尚未发布）
+## 1.0.3 — 消息接入开发版（2026-10-21）
 
-- 新增独立OneBot固定命令解析与V11消息事件规范化基础；不接收非文本消息段，校验bot实例标识，生成稳定事件键和payload摘要。
-- 当前仅解析，不连接OneBot、不绑定账号、不持久化去重、不授权或执行ERP操作；README与OneBot文档记录了范围。
-- 当前环境SQLite全套回归74 passed、4 skipped；新增OneBot定向用例11 passed；Ruff通过。此工作仍在feature/onebot-foundation分支，尚未创建新版本标签。
+- 新增独立OneBot V11反向Universal WebSocket，实例/Bearer/bot身份校验、帧限制、实例停用和令牌轮换；不存储令牌原文。
+- 新增Web密码复核的5分钟单次绑定挑战、指定QQ与实例、绑定撤销、持久化收件箱和事务审计；重复消息不重复执行，同键不同载荷拒绝。
+- 新增固定命令、受控私聊采购/库存查询，复用Web权限、关联范围和字段投影；群聊不回复，消息写入仍要求Web操作。
+- 接入用户提供的原始Q版Logo，覆盖登录、侧栏、浏览器图标与README，并补齐standalone/Docker静态资源复制。
+- 新增真实API消息管理界面；DSH超时候选由Codex审查接管，补充敏感值清除和隐藏字段保护。
+- 修正需要审批的读取在Web与消息上的过滤；新增独立迁移、收件箱防修改和失败回滚审计。
+- 全套PostgreSQL/SQLite回归140 passed、5 skipped；Chromium7 passed；类型/格式/生产构建与迁移一致性检查通过。
+- 正向WebSocket、多轮确认、AI、消息写入和真实QQ/生产部署验收仍待后续阶段。
 
 ## 1.0.2 — 开发快照（2026-10-20）
 

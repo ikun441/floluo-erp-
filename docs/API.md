@@ -44,3 +44,15 @@
 收货参数：version、warehouse_id、lines；每行line_id必须来自当前订单，quantity不得超过未收数量；每次请求至少一行，不允许重复行ID。Idempotency-Key按当前用户隔离、限制128个可打印ASCII字符。相同键/相同规范化命令重放返回已有收货单，重新授权并使用当前字段投影；不同内容返回409。重试必须保留首次version及其他命令字段。成功写入但缺少读取相关单据的权限时，只返回saved=true；重放无当前权限时拒绝，绝不重复加库存。
 
 库存余额和流水没有创建、修改、删除API。列表上限100，固定ID游标；传入after时仅对ID可读记录分页，防止隐藏ID的游标探测。采购单列表在LIMIT前同时过滤供应商与所有明细商品的可见性；收货和流水进一步检查订单及仓库权限。
+
+## v1.0.3 消息控制与查询入口
+
+所有 Web 路由均要求现有会话，写入继续验证 CSRF/Origin，并在同一授权 Gate 事务内审计。QQ/bot ID 使用十进制字符串，拒绝额外身份字段。
+
+- GET/POST `/api/v1/onebot_instances`：范围过滤的实例列表（最多100）；创建体 `{name, bot_id}`，返回 `{instance, access_token}`。令牌只在创建/轮换响应中出现，普通读取与模拟不返回令牌摘要。
+- PATCH `/api/v1/onebot_instances/{id}`：`{version, active}`，当前不允许修改已建立实例的 bot ID。
+- POST `/api/v1/onebot_instances/{id}/rotate_token`：`{version}`，返回一次新令牌并递增版本。
+- GET `/api/v1/message_bindings`：仅当前用户且受策略过滤的绑定，最多100。
+- POST `/api/v1/message_binding_challenges`：`{instance_id, platform_user_id, password}`，复核当前密码后返回 `{command, expires_at}`；挑战5分钟、指定实例/平台账号、单次使用。
+- POST `/api/v1/message_bindings/{id}/revoke`：`{version}`，只允许撤销自身且具有 revoke 权限的绑定。
+- WebSocket `/onebot/v11/ws/{instance_id}`：反向 Universal 接入，不使用 Web Cookie 授权。必须 Bearer 令牌与固定 bot 标识；详见 ONEBOT.md。当前业务工具只有只读采购/库存查询，写入意图不执行。

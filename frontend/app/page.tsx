@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import MessagingView from "./components/MessagingView";
 import LoginView from "./components/LoginView";
 import ProcurementView, {
   StockView,
@@ -127,6 +128,10 @@ const errorMessages: Record<string, string> = {
   order_not_approved: "当前采购单尚未批准或已完成入库",
   invalid_order_transition: "当前订单状态不支持此操作",
   field_write_denied: "当前账号没有部分字段的修改权限",
+  binding_conflict: "此实例已存在账号绑定，请检查已有绑定",
+  invalid_credentials: "当前密码不正确",
+  login_temporarily_unavailable: "账号暂时锁定，请稍后重试",
+  record_not_found: "记录不存在或当前账号没有访问权限",
   default_deny: "当前账号没有此操作权限",
 };
 class ApiError extends Error {
@@ -701,7 +706,7 @@ function Permissions() {
                     {["hidden", "masked", "read", "write"]
                       .filter(
                         (v) =>
-                          field !== "password" ||
+                          !["password", "access_token"].includes(field) ||
                           ["hidden", "write"].includes(v),
                       )
                       .map((v) => (
@@ -877,7 +882,7 @@ function Dashboard() {
             采购与库存流水 → OneBot → 可选 AI → 审批 → 销售与报表。
           </p>
           <div className="notice compact">
-            采购订单、审批与入库已接入真实业务。消息、AI、销售与报表按后续阶段扩展。
+            采购与入库已接入真实业务；消息支持可信连接、账号绑定与受控查询。AI、销售与报表按后续阶段扩展。
           </div>
         </section>
       </div>
@@ -924,6 +929,7 @@ function Workspace() {
     { key: "dashboard", label: "工作概览", icon: LayoutDashboard },
     { key: "procurement", label: "采购订单", icon: Box },
     { key: "stock", label: "库存与入库", icon: Box },
+    { key: "messaging", label: "消息接入", icon: Users },
     { key: "configuration", label: "采购业务规则", icon: ShieldCheck },
     { key: "categories", label: "商品分类", icon: Box },
     { key: "suppliers", label: "供应商", icon: Building2 },
@@ -947,7 +953,16 @@ function Workspace() {
     <div className={"app" + (dark ? " dark" : "")}>
       <aside className="sidebar">
         <a className="brand" href="/">
-          <span className="brand-mark">弗</span>
+          <span className="brand-mark logo-mark">
+            <img
+              className="product-logo"
+              src="/brand/floluo-logo.png"
+              alt="弗洛洛 ERP Logo"
+              width={42}
+              height={42}
+              decoding="async"
+            />
+          </span>
           <span>
             弗洛洛 <b>ERP</b>
             <small>ENTERPRISE WORKSPACE</small>
@@ -977,7 +992,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.2 · 开发版</small>
+            统一授权，安心协作<small>v1.0.3 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -1017,6 +1032,8 @@ function Workspace() {
             <ProcurementView api={api} />
           ) : page === "stock" ? (
             <StockView api={api} />
+          ) : page === "messaging" ? (
+            <MessagingView api={api} />
           ) : page === "configuration" ? (
             <BusinessConfiguration api={api} />
           ) : page === "policies" ? (

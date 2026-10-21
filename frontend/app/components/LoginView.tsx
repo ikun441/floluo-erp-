@@ -10,8 +10,6 @@ import {
   Database,
   Eye,
   EyeOff,
-  Fingerprint,
-  Layers3,
   LoaderCircle,
   LockKeyhole,
   Pause,
@@ -88,8 +86,15 @@ export default function LoginView({ done, authenticate }: Props) {
           transition={transition(0.05)}
         >
           <a href="/" className="stage-brand" aria-label="弗洛洛 ERP 首页">
-            <span className="stage-brand-icon">
-              <Layers3 size={23} strokeWidth={1.4} />
+            <span className="stage-brand-icon logo-mark">
+              <img
+                className="product-logo"
+                src="/brand/floluo-logo.png"
+                alt="弗洛洛 ERP Logo"
+                width={43}
+                height={43}
+                decoding="async"
+              />
             </span>
             <span>
               弗洛洛<span className="stage-brand-erp">ERP</span>
@@ -194,7 +199,7 @@ export default function LoginView({ done, authenticate }: Props) {
             企业工作空间
           </span>
           <span>
-            V 1.0.2 <i>BETA</i>
+            V 1.0.3 <i>BETA</i>
           </span>
         </motion.div>
         <motion.section
@@ -203,9 +208,15 @@ export default function LoginView({ done, authenticate }: Props) {
           transition={transition(0.25)}
           aria-labelledby="login-title"
         >
-          <div className="login-welcome-icon">
-            <Fingerprint size={30} strokeWidth={1.25} />
-            <span />
+          <div className="login-welcome-icon logo-mark">
+            <img
+              className="product-logo"
+              src="/brand/floluo-logo.png"
+              alt="弗洛洛角色标志"
+              width={76}
+              height={76}
+              decoding="async"
+            />
           </div>
           <span className="form-eyebrow">WELCOME TO YOUR WORKSPACE</span>
           <h1 id="login-title">

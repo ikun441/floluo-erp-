@@ -7,4 +7,4 @@ COPY alembic.ini ./
 RUN uv sync --frozen --no-dev && useradd --uid 10001 --create-home app
 USER app
 ENV PATH="/app/.venv/bin:$PATH"
-CMD ["uvicorn", "erp.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+CMD ["uvicorn", "erp.main:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--ws-max-size", "65536"]

@@ -15,7 +15,9 @@ from . import __version__
 from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
+from .messaging_api import register as register_messaging
 from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
+from .onebot.transport import register as register_onebot
 from .permissions import RESOURCES, Engine, conflicts, resource_catalog, subject, validate_rules
 from .procurement_api import register as register_procurement
 from .schemas import CreateEntity, Login, PatchEntity, Publish, Simulate
@@ -355,6 +357,8 @@ def create_app(settings=None):
         )
 
     register_procurement(app, database, authorized_engine)
+    register_messaging(app, database, authorized_engine)
+    register_onebot(app)
 
     # Explicit registry prevents arbitrary table access through the path parameter.
     def resource_spec(resource):

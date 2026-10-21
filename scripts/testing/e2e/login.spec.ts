@@ -5,6 +5,14 @@ const root = path.resolve(import.meta.dirname, "../../..");
 async function open(page: Page) {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "欢迎回来。" })).toBeVisible();
+  await expect(page.locator(".stage-brand img")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".stage-brand img")
+        .evaluate((img) => (img as HTMLImageElement).naturalWidth),
+    )
+    .toBe(1254);
 }
 async function login(
   page: Page,
@@ -21,6 +29,13 @@ async function login(
   await expect(
     page.getByRole("heading", { name: "工作空间，一目了然。" }),
   ).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".brand img")
+        .evaluate((img) => (img as HTMLImageElement).naturalWidth),
+    )
+    .toBe(1254);
 }
 
 test("real login, persisted department, permission UI and logout", async ({
@@ -51,6 +66,14 @@ test("real login, persisted department, permission UI and logout", async ({
   ).toBeVisible();
   await page.getByRole("button", { name: "退出登录", exact: true }).click();
   await expect(page.getByRole("heading", { name: "欢迎回来。" })).toBeVisible();
+  await expect(page.locator(".stage-brand img")).toBeVisible();
+  await expect
+    .poll(() =>
+      page
+        .locator(".stage-brand img")
+        .evaluate((img) => (img as HTMLImageElement).naturalWidth),
+    )
+    .toBe(1254);
 });
 
 test("real WebGL scene, pause control and password visibility", async ({
@@ -311,4 +334,69 @@ test("two real users approve and receive a purchase into inventory", async ({
   await expect(
     page.getByRole("cell", { name: "purchase_receipt", exact: true }),
   ).toBeVisible();
+});
+
+test("message control plane persists instances and clears one-time secrets", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  await page.getByRole("button", { name: "消息接入", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "消息机器人", exact: true }),
+  ).toBeVisible();
+  const name = "browser-bot-" + Date.now();
+  await page.getByLabel("实例名称", { exact: true }).fill(name);
+  await page.getByLabel("机器人 QQ（bot_id）", { exact: true }).fill("10001");
+  const created = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/onebot_instances") &&
+      r.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "创建实例", exact: true }).click();
+  expect((await created).status()).toBe(200);
+  await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "访问令牌（仅显示一次）", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "清除令牌", exact: true }).click();
+  await page.locator('input[name="platform_user_id"]').fill("20002");
+  await page
+    .locator('input[name="password"]')
+    .fill("Browser-fixture-" + "x".repeat(20));
+  const issued = page.waitForResponse((r) =>
+    r.url().endsWith("/api/v1/message_binding_challenges"),
+  );
+  await page.getByRole("button", { name: "生成绑定命令", exact: true }).click();
+  expect((await issued).status()).toBe(200);
+  await expect(
+    page.getByRole("heading", { name: "待发送的绑定命令", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator('input[name="password"]')).toHaveValue("");
+  await page.getByRole("button", { name: "清除命令", exact: true }).click();
+  const row = page
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name, exact: true }) });
+  await row.getByRole("button", { name: "轮换令牌", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "访问令牌（仅显示一次）", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "清除令牌", exact: true }).click();
+  await row.getByRole("button", { name: "停用", exact: true }).click();
+  await expect(
+    row.getByRole("cell", { name: "已停用", exact: true }),
+  ).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: "消息接入", exact: true }).click();
+  await expect(page.getByRole("cell", { name, exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "访问令牌（仅显示一次）", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "待发送的绑定命令", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/messaging.png"),
+    fullPage: true,
+  });
 });

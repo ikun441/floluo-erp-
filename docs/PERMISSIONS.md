@@ -25,3 +25,11 @@
 读取采购金额时，total、unit_price、line_amount取最严格可见级别并联动投影；任何一项隐藏则全部不返回，任何一项脱敏则全部脱敏，防止反推。创建/编辑订单需要supplier_id、currency、note、lines、unit_price的write权限；派生状态和总额由独立动作与业务规则控制。读关联ID要求对应资源ID也可读。
 
 基础采购审批使用明确状态机和approved_by，不是通用审批工作流。requires_approval=true的策略仍阻止执行，直到后续通用审批回执机制完成；采购状态批准不会自动绕过该标志。模拟器只展示权限决策，业务状态、币种/税规则、自审批限制在服务中另行检查。
+
+## v1.0.3 消息资源
+
+新增 onebot_instances（read/create/update/rotate_token）与 message_bindings（read/create/revoke/use，自身范围）。access_token 与 password 均为只写字段，策略拒绝 read/masked 模式，通用投影也永不返回这些字段。实例令牌创建/轮换仅在已获得明确令牌写权限的响应中返回一次。
+
+实例连接认证与 ERP 绑定身份不同：可信协议源提供平台身份，单次挑战将其映射到 ERP 当前用户；每条业务查询重新构建 Subject 和策略引擎。消息查询复用采购/库存 SQL 范围与字段投影，用户无法提供角色/部门替代服务端主体。群聊不返回业务结果。升级不修改既有策略，新资源仍默认拒绝。
+
+修正 requires_approval 的读取路径：SQL 列表范围排除任何匹配的待审批允许策略，详情投影同样拒绝；Web 与消息一致。在通用审批回执机制完成前，这类读取不返回记录。

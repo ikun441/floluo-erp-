@@ -1039,3 +1039,14 @@
     text-shadow: 0 2px 16px #0c0719;
   }
 }
+
+.stage-brand-icon.logo-mark,
+.login-welcome-icon.logo-mark {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.login-welcome-icon.logo-mark {
+  width: 76px;
+  height: 76px;
+}

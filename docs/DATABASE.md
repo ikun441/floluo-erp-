@@ -31,3 +31,12 @@
 Phase 1 审计使用 SHA256 串联，能检测链内修改，不能抵御数据库所有者重写整链或裁剪尾部。生产应由外部可信介质定期保存链头签名/锚点；应用数据库角色无 UPDATE/DELETE/TRUNCATE 权限。
 
 Phase 2具体关系、精度、状态与幂等规则见PROCUREMENT.md；新增采购、收货、流水、余额、命令幂等、业务配置和outbox表；审计新行采用v2摘要，旧链摘要不重写。
+
+## v1.0.3 消息身份与收件箱
+
+- `onebot_instance`：独立协议实例，固定 bot_id、启用状态和仅存摘要的连接令牌。令牌轮换使旧连接在下一帧失效。
+- `message_binding`：实例与平台用户映射到 ERP owner_id；(instance_id, platform_user_id) 与 (instance_id, owner_id) 均唯一，停用记录保留。平台群角色不参与授权。
+- `binding_challenge`：Web 当前用户经密码复核后，为指定实例和预期平台用户签发5分钟单次挑战；只存摘要，兑换时检查范围、有效期、当前用户与策略。
+- `message_inbox`：event_key 主键、实例外键、payload_digest、结果和处理时间；不保存原文、绑定码或查询结果。事件处理、绑定变更、收件箱结果和审计同事务；重复事件不执行、不重发旧结果，同键不同内容拒绝。
+
+关系：OneBotInstance 1—N MessageBinding N—1 User；OneBotInstance 1—N BindingChallenge N—1 User；OneBotInstance 1—N MessageInbox。先持有 authorization_gate 再访问这些记录，策略与消息操作共享现有事务授权边界。新资源默认拒绝，升级不自动扩大原有策略。

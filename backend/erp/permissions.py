@@ -17,6 +17,7 @@ from .business_models import (
     SystemConfiguration,
     Warehouse,
 )
+from .message_models import MessageBinding, OneBotInstance
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -214,6 +215,24 @@ RESOURCES["warehouses"] = Resource(
 )
 
 
+RESOURCES.update(
+    {
+        "onebot_instances": Resource(
+            OneBotInstance,
+            frozenset({"id", "version", "name", "bot_id", "active", "access_token"}),
+            frozenset({"read", "create", "update", "rotate_token"}),
+            virtual_fields=frozenset({"access_token"}),
+        ),
+        "message_bindings": Resource(
+            MessageBinding,
+            frozenset({"id", "version", "instance_id", "platform_user_id", "owner_id", "active"}),
+            frozenset({"read", "create", "revoke", "use"}),
+            "owner_id",
+        ),
+    }
+)
+
+
 def condition_value(column, value):
     if column.type.python_type is Decimal:
         if type(value) not in {str, int}:
@@ -288,7 +307,10 @@ def validate_rules(rules: list[Rule]):
                 condition_value(column, value)
             if python_type is bool and c.op not in {"eq", "in"}:
                 raise ValueError("boolean ordering is not supported")
-        if rule.fields.get("password", "hidden") in {"masked", "read"}:
+        if any(
+            rule.fields.get(field, "hidden") in {"masked", "read"}
+            for field in ("password", "access_token")
+        ):
             raise ValueError("password is write-only")
 
 
@@ -373,7 +395,16 @@ class Engine:
         rules = self.applicable(resource, action)
         allows = [self.predicate(r) for r in rules if r.effect == "allow"]
         denies = [self.predicate(r) for r in rules if r.effect == "deny"]
-        return and_(or_(*allows) if allows else false(), not_(or_(*denies)) if denies else true())
+        pending = (
+            [self.predicate(r) for r in rules if r.effect == "allow" and r.requires_approval]
+            if action == "read"
+            else []
+        )
+        return and_(
+            or_(*allows) if allows else false(),
+            not_(or_(*denies)) if denies else true(),
+            not_(or_(*pending)) if pending else true(),
+        )
 
     def readable_scope(self, resource, fields):
         restrictive = [
@@ -424,10 +455,11 @@ class Engine:
 
     def project(self, resource, data):
         decision = self.authorize(resource, "read", data)
-        if not decision["allowed"]:
+        if not decision["allowed"] or decision["requires_approval"]:
             return None
         return {
             k: "***" if decision["fields"][k] == "masked" else v
             for k, v in data.items()
-            if k != "password" and decision["fields"].get(k, "hidden") != "hidden"
+            if k not in {"password", "access_token"}
+            and decision["fields"].get(k, "hidden") != "hidden"
         }

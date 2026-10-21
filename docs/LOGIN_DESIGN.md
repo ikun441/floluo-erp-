@@ -9,7 +9,7 @@
 - [Codrops / Glass Effect](https://tympanus.net/Tutorials/GlassEffect/)：光线、透明感与实体空间。
 - [Motion / reduced motion](https://motion.dev/docs/react-use-reduced-motion)：尊重系统减少动态效果偏好。
 
-参考用于视觉方向，没有复制站点素材。当前抽象雕塑是登录页视觉资产，不能视作已完成的弗洛洛 Q 版角色 Logo；角色 Logo 仍待独立制作。
+参考用于视觉方向，没有复制站点素材。抽象雕塑保留为登录页背景视觉。v1.0.3已接入用户提供的Q版原始PNG作为品牌Logo，登录页、工作台和浏览器图标统一使用该资源，见BRANDING.md。
 
 ## 运行边界
 

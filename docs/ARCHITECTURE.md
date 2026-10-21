@@ -32,3 +32,7 @@ FastAPI 密码哈希参考 https://fastapi.tiangolo.com/tutorial/security/oauth2
 procurement_api仅适配请求/响应，procurement服务统一执行草稿、提交、审批、取消、入库；复用当前事务、身份和权限引擎。每次请求先锁authorization_gate，订单/行/余额再按稳定顺序锁定。收货、收货行、不可变流水、余额、幂等记录、订单状态、outbox及成功审计同事务提交；失败先回滚，再独立追加失败审计。意外异常同样尝试记录500；若数据库本身不可用，仅输出无参数的追踪日志，不能保证数据库审计落盘。
 
 当前库存服务只支持采购入库，尚不实现销售出库、退货、成本核算或冲销。outbox是持久化待处理记录，未连接消息消费者，不返回虚构通知成功。系统无需Redis/AI/OneBot即可完成当前Web采购流程。
+
+## v1.0.3 消息切片
+
+OneBot transport → message_gateway（Gate、事务、收件箱和审计）→ message_service（绑定/受控查询）→ 已有采购范围与投影/权限引擎。适配器不读写数据库、不解释ERP角色。Web messaging_api调用相同身份服务和统一权限资源。当前只实现反向Universal与私聊只读工具，AI和消息写入不参与核心启动。

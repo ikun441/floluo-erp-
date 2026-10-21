@@ -78,9 +78,12 @@ def normalize_message_event(
     text = "".join(parts)
     if not text.strip() or len(text) > MAX_EVENT_TEXT:
         raise InvalidOneBotEvent("invalid_text_length")
-    canonical = json.dumps(
-        payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str
-    ).encode()
+    try:
+        canonical = json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode()
+    except (TypeError, ValueError) as exc:
+        raise InvalidOneBotEvent("invalid_event_payload") from exc
     event_identity = "\0".join(
         (
             instance_id,
