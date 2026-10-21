@@ -237,7 +237,7 @@ wheels = [
 
 [[package]]
 name = "floluo-erp"
-version = "1.0.4"
+version = "1.0.5"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },

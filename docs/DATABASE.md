@@ -46,3 +46,8 @@ Phase 2具体关系、精度、状态与幂等规则见PROCUREMENT.md；新增�
 新增 `message_operation`：Row UUID/UTC时间/version；owner_id → User，binding_id → MessageBinding，保存签发时binding_version；resource固定purchase_orders；payload仅存白名单采购参数，不存原始消息、密码或连接令牌；target_order_id唯一预留ID，result_id → PurchaseOrder且唯一；状态 collecting_missing / awaiting_confirmation / completed / cancelled / expired；expires_at；preview_digest覆盖引用资料版本。
 
 Web发起时binding_id/binding_version为空，消息发起时保存有效绑定版本。One MessageBinding 1—N MessageOperation；User 1—N MessageOperation；完成的MessageOperation 1—1 PurchaseOrder。创建请求不创建订单。预览用同一非写入采购校验计划构建，执行仍走采购服务。确认同时检查会话version、摘要、当前绑定、当前主体/策略、引用资料版本，订单/会话完成/outbox/审计同事务。完成回放不得重复写入，结果按当前权限投影。只有归属用户可查看/补充/取消/确认，仍需统一策略授权；过期按访问时推进，不引入后台服务必需依赖。含任何新会话数据时拒绝破坏性迁移降级。
+
+
+## v1.0.5 回复投递与连接运行态（已实现）
+
+onebot_instance 1—0..1 onebot_connection；message_inbox 1—0..1 message_delivery（event_key唯一外键）。message_delivery同时关联实例、可空用户和版本化绑定快照。回复只持久化受限recipe，不持久化结果正文，终态清除recipe。连接UUID作为跨进程租约栅栏，单实例仅一个未过期拥有者。新表、状态约束、外键与队列索引通过新迁移添加，旧表与迁移不改动。完整字段、状态、权限和失败语义见[DELIVERY.md](DELIVERY.md)。

@@ -237,6 +237,12 @@ def test_onebot_natural_create_uses_binding_dedupe_and_existing_confirmation(env
     assert result["operation"]["missing_fields"] == ["supplier", "currency"]
     assert message_gateway.process(env["engine"], conn, event) is None
     with buyer.websocket_connect("/onebot/v11/ws/" + row["id"], headers=headers(token)) as ws:
+        resumed = ws.receive_json()
+        assert (
+            json.loads(resumed["params"]["message"][0]["data"]["text"])["operation"]["id"]
+            == result["operation"]["id"]
+        )
+        ws.send_json({"status": "ok", "retcode": 0, "echo": resumed["echo"]})
         operation = result["operation"]["id"]
         supplier = admin.get("/api/v1/suppliers").json()["items"][0]["id"]
         supplemented = reply(ws, message(f"/erp 补充 {operation} 供应商={supplier} 币种=CNY", 3))

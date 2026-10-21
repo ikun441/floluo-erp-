@@ -41,3 +41,10 @@ message_operations是独立注册资源，支持read/create/update/cancel/confir
 preview字段控制参数写入与完整预览展示，state字段控制显式取消/确认。展示预览前重查业务create/read和引用范围；完整关键金额不可读时拒绝预览。刷新导致version变化后再次决策，避免旧读权限继续展示。业务result/result_id只在当前采购读取范围及字段投影允许时返回，列表不直接暴露result_id。created_at/expires_at/preview/result等虚拟字段不能用作SQL条件AST。
 
 确认检查原参数摘要和资料版本并在创建后提交前复核；重放再次要求当前create权限并投影当前可见结果。requires_approval仍拒绝执行，不把请求确认当作通用审批。
+
+
+## v1.0.5 监控与投递
+
+onebot_connections与message_deliveries仅有read；后者支持own/records/all，前者支持records/all。关联onebot_instances.id必须在当前可读范围，筛选state和游标id也需可读。监控不注册recipe、收件人、连接UUID/回执token或原文字段，不能经通用CRUD读写。旧角色必须显式增加新资源权限；前端隐藏不替代后端约束。
+
+投递器是内部受限执行者，不能接受客户端角色/SQL/自由工具。业务回复每次按保存主体、平台收件人和绑定版本重建Engine，检查bindings.use后调用相同业务服务。只重建查询或已有请求视图，不重放创建/审批/入库。身份失效或请求授权不足抑制并清除recipe，读取权限变化按当前范围/字段重新过滤。

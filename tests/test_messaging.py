@@ -1,4 +1,5 @@
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
@@ -6,7 +7,13 @@ import pytest
 from conftest import PASSWORD, grant, post
 from erp import message_gateway
 from erp.audit import digest, verify
-from erp.message_models import BindingChallenge, MessageBinding, MessageInbox, OneBotInstance
+from erp.message_models import (
+    BindingChallenge,
+    MessageBinding,
+    MessageDelivery,
+    MessageInbox,
+    OneBotInstance,
+)
 from erp.models import AuditEvent, now
 from erp.onebot.events import normalize_message_event
 from erp.permissions import RESOURCES
@@ -74,6 +81,21 @@ def reply(ws, payload):
     action = ws.receive_json()
     assert action["action"] == "send_private_msg"
     assert action["params"]["user_id"] == payload["user_id"]
+    with Session(ws.app.state.engine) as db:
+        delivery_id = db.scalar(
+            select(MessageDelivery.id).where(MessageDelivery.attempt_token == action["echo"])
+        )
+    assert delivery_id is not None
+    ws.send_json({"status": "ok", "retcode": 0, "echo": action["echo"], "data": {"message_id": 1}})
+    # ACK persistence is an explicit barrier before the test may immediately disconnect.
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        with Session(ws.app.state.engine) as db:
+            if db.get(MessageDelivery, delivery_id).state == "delivered":
+                break
+        time.sleep(0.01)
+    else:
+        pytest.fail("OneBot API acknowledgment was not durably recorded")
     return json.loads(action["params"]["message"][0]["data"]["text"])
 
 

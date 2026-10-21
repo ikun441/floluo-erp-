@@ -1086,3 +1086,26 @@ pre {
 .local-intent-result h3 {
   overflow-wrap: anywhere;
 }
+
+.connection-monitor {
+  min-width: 0;
+  margin-bottom: 24px;
+}
+.connection-monitor .panel-heading {
+  padding: 0;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.connection-monitor .delivery-heading {
+  margin-top: 24px;
+}
+.connection-monitor h3 {
+  margin: 18px 0 12px;
+}
+.connection-monitor td,
+.connection-monitor th {
+  white-space: nowrap;
+}
+.connection-monitor .pagination {
+  margin-top: 12px;
+}

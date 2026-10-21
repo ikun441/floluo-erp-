@@ -1,9 +1,10 @@
 # OneBot V11 接入与交互状态机
 
-## 未发布：离线中文规则
+## v1.0.5 离线中文规则与可靠回复
 
 库存查询与单商品采购描述现可在绑定后的私聊使用，例如「查询一下鼠标还有多少库存」和「登记采购20个鼠标，每个35元」。明确规则匹配失败时提示固定命令/表单，不调用AI。供应商、币种缺失继续走补充流程，单位保留并在当前授权预览/确认时核对商品基础单位。详情见[INTERACTION.md](INTERACTION.md)。Web操作工作台提供同一解析器的识别、结构化结果和受控执行入口。
 
+连接与回复现在使用持久化recipe和单实例租约，支持回执、重连、有界重试及Web监控。每次发送重查当前身份与权限，详见[DELIVERY.md](DELIVERY.md)。
 
 ## v1.0.4 采购请求与Web确认
 
@@ -44,10 +45,10 @@
 
 收件箱采用数据库 UPDATE/DELETE/TRUNCATE 防修改策略（SQLite 不提供 TRUNCATE），不保存原文、查询结果、令牌或绑定码。实例每分钟300条、实例内单用户每分钟30条；超限事件记为 rate_limited，不执行且不回复。绑定挑战每用户每分钟最多5次；密码复核失败沿用账号锁定保护。
 
-回复仅在数据库提交后，向当前 Universal 连接发送 `send_private_msg` 请求。当前未持久化回复发送队列、未跟踪 API 回执确认，因此可能已处理但回复丢失；不承诺消息投递恰好一次。收件箱/挑战的保留和清理策略尚待配置，不能随意清理去重历史。
+回复与收件箱/请求同事务入队，提交后由当前租约连接发送 `send_private_msg`，使用echo跟踪当前尝试的API回执。失败/超时/重连按当前权限重新生成，最多3次、5分钟，终态清空recipe；不存旧业务结果。回执丢失仍可能重复回复，不承诺恰好一次或对方已读。收件箱/挑战/投递历史的保留和清理策略尚待配置，不能随意清理去重历史。
 
 ## 后续范围
 
-尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、连接状态监控后台、自由自然语言补充、消息直接落单和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
+尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、自由自然语言补充、消息直接落单和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
 
 实际验证包含 ASGI WebSocket、真实回环 TCP WebSocket、PostgreSQL 重复消息并发、Web/消息相同数据范围和字段投影。尚未连接真实 QQ/生产 OneBot 实例，也未验证 Docker/Linux/TLS 环境。

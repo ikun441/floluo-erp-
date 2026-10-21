@@ -39,3 +39,10 @@ OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实
 新增9c8b7a6d5e4f，在原消息身份迁移之后创建操作会话。先备份并在副本验收后执行alembic upgrade head；存在会话时拒绝破坏性降级。没有新增外部服务或环境密钥依赖。旧角色需显式授权message_operations，详见OPERATIONS.md。
 
 会话过期由访问时检查推进，不依赖Celery/Redis；保留历史以支持重放与审计，目前没有自动清理后台。版本更新日志主文件为docx/version.md，保留文件名与Markdown格式。
+
+
+## v1.0.5 升级与恢复
+
+备份后先停止旧后端，再执行`alembic upgrade head`（新增ad9e8f7a6b5c），最后启动新版本；禁止混跑旧版无租约发送器与新版发送器。已有收件箱不补发，新历史存在时迁移拒绝破坏性降级。旧角色需在权限中心显式添加onebot_connections/message_deliveries.read及所需字段/数据范围；不自动扩大权限。
+
+不增加Redis/Celery依赖，当前Universal连接负责有界发送轮询。正常断线释放租约；异常退出后最多等待90秒失效，再由OneBot客户端重连接续未过期任务。最多3次、5分钟，失败/过期在监控查看，不提供绕权强制补发。真实QQ、多进程与Linux容器生产部署仍待验收，保留/备份/清理策略需另行落实。

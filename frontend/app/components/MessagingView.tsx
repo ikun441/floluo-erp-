@@ -1,4 +1,5 @@
 "use client";
+import ConnectionMonitor from "./ConnectionMonitor";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -203,6 +204,7 @@ export default function MessagingView({ api }: { api: Api }) {
         </div>
       </div>
       <Failure error={instances.error || bindings.error || error} />
+      <ConnectionMonitor api={api} instances={items} />
       {revealed && (
         <section className="panel padded">
           <div className="panel-heading">

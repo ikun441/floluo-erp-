@@ -17,7 +17,13 @@ from .business_models import (
     SystemConfiguration,
     Warehouse,
 )
-from .message_models import MessageBinding, MessageOperation, OneBotInstance
+from .message_models import (
+    MessageBinding,
+    MessageDelivery,
+    MessageOperation,
+    OneBotConnection,
+    OneBotInstance,
+)
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -284,6 +290,47 @@ def resource_catalog():
         }
         for name, res in RESOURCES.items()
     }
+
+
+RESOURCES["onebot_connections"] = Resource(
+    OneBotConnection,
+    frozenset(
+        {
+            "id",
+            "version",
+            "instance_id",
+            "instance_version",
+            "state",
+            "connected_at",
+            "last_seen_at",
+            "lease_expires_at",
+            "disconnected_at",
+            "disconnect_reason",
+        }
+    ),
+    frozenset({"read"}),
+)
+RESOURCES["message_deliveries"] = Resource(
+    MessageDelivery,
+    frozenset(
+        {
+            "id",
+            "version",
+            "instance_id",
+            "owner_id",
+            "state",
+            "attempts",
+            "next_attempt_at",
+            "expires_at",
+            "delivered_at",
+            "last_error",
+            "created_at",
+            "updated_at",
+        }
+    ),
+    frozenset({"read"}),
+    "owner_id",
+)
 
 
 LEVEL = {"hidden": 0, "masked": 1, "read": 2, "write": 3}

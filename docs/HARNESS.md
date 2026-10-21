@@ -16,3 +16,6 @@ v1.0.4 OperationsView: an exact-file isolated task timed out at240 seconds and n
 
 
 离线规则样例任务：2026-10-21，精确授权tests/fixtures/local_intent_cases.json，180秒超时，两个上游200响应，无候选文件。未应用任何DSH产物，也未放宽沙箱或重试；Codex接管有边界的样例与可信回归测试。此任务不计为成功委派。
+
+
+v1.0.5回执样例任务未得到可审查报告或候选文件，未采用任何产物，不计为成功委派；没有放宽隔离。最终回执、连接、并发和权限测试由Codex实现并真实运行。

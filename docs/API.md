@@ -69,7 +69,7 @@
 详情预览需要message_operations.preview可读及全部关键采购金额字段可读；更新参数需preview可写，取消/确认需state可写。409用于旧版本/旧摘要/终态冲突，403用于当前授权、绑定或预览不足。请求固定10分钟，单用户最多20条等待态。密码复核限流/锁定沿用统一认证保护。详见OPERATIONS.md。
 
 
-## 离线解析接口（未发布）
+## v1.0.5 离线解析接口
 
 以下三个POST均只接受`{text: string}`，1–4096字符，拒绝额外键；要求当前会话与CSRF/Origin。没有数据库字段、SQL、身份或模型参数入口。
 
@@ -78,3 +78,11 @@
 - `/api/v1/intents/requests`：后端重新解析且只允许采购create，复用持久化请求和当前权限；仅返回请求详情。仍须原有confirm接口复核密码才能创建draft。
 
 不识别/类型不匹配为422；单位不可读或与商品不一致统一422 quantity_unit_unresolved。规则与边界详见[INTERACTION.md](INTERACTION.md)。不增加新角色权限，也不会扩展旧角色授权。
+
+
+## v1.0.5 只读消息监控
+
+- GET `/api/v1/onebot_connections?limit=50&after=&state=`：state为connected/disconnected，limit≤100；返回当前可见实例的连接元数据。连接UUID/凭据不暴露；state=connected还须结合lease_expires_at确认有效。
+- GET `/api/v1/message_deliveries?limit=50&after=&state=`：state为pending/awaiting_ack/delivered/failed/suppressed/expired；仅返回当前允许的元数据，不能获取recipe、收件人、原文或业务结果。
+
+分别要求新资源onebot_connections/message_deliveries的read，并且关联实例ID当前可读；数据范围在分页前过滤，按状态/ID筛选需相应字段可读。没有通用详情或写入/强制补发接口。日期在投影后输出UTC ISO8601；过期按受限维护推进。已有角色需显式授权，新bootstrap为当前资源建立策略。

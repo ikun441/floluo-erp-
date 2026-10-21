@@ -3,11 +3,12 @@
 import asyncio
 import json
 import logging
-from uuid import uuid4
 
+import anyio
 from fastapi import WebSocket, WebSocketDisconnect
 from starlette.concurrency import run_in_threadpool
 
+from .. import delivery_service as deliveries
 from .. import message_gateway as gateway
 from .events import InvalidOneBotEvent, normalize_message_event
 
@@ -51,26 +52,41 @@ def register(app):
             connection = await run_in_threadpool(
                 gateway.authenticate, app.state.engine, instance_id, auth[7:], int(bot)
             )
+            connection = await run_in_threadpool(
+                gateway.open_connection, app.state.engine, connection
+            )
         except gateway.ConnectionRejected:
             await ws.close(code=1008)
             return
         # The raw credential remains within this handshake's stack, never the application context.
         del auth
-        await ws.accept()
+        receive_task = None
+        reason = "peer_closed"
         try:
+            await ws.accept()
             while True:
+                await run_in_threadpool(gateway.check_alive, app.state.engine, connection)
+                # A single leased writer owns all sends; no untracked background task.
+                for _ in range(5):
+                    action = await run_in_threadpool(deliveries.claim, app.state.engine, connection)
+                    if action is None:
+                        break
+                    await asyncio.wait_for(ws.send_json(action), timeout=5)
+                if receive_task is None:
+                    receive_task = asyncio.create_task(ws.receive_text())
                 try:
-                    frame = await asyncio.wait_for(ws.receive_text(), timeout=60)
+                    frame = await asyncio.wait_for(asyncio.shield(receive_task), timeout=2)
                 except TimeoutError:
-                    await run_in_threadpool(gateway.check_alive, app.state.engine, connection)
                     continue
+                receive_task = None
                 if len(frame.encode("utf-8")) > MAX_FRAME_BYTES:
+                    reason = "protocol_error"
                     await ws.close(code=1009)
                     return
                 payload = json.loads(
                     frame, object_pairs_hook=strict_object, parse_constant=reject_constant
                 )
-                await run_in_threadpool(gateway.check_alive, app.state.engine, connection)
+                await run_in_threadpool(gateway.check_alive, app.state.engine, connection, True)
                 if not isinstance(payload, dict):
                     raise InvalidOneBotEvent("invalid_event")
                 if payload.get("post_type") in {"meta_event", "notice", "request"}:
@@ -80,40 +96,41 @@ def register(app):
                     ):
                         raise InvalidOneBotEvent("bot_identity_mismatch")
                     continue
-                # API responses are not events and never enter a business parser.
                 if "post_type" not in payload and "echo" in payload and "retcode" in payload:
+                    await run_in_threadpool(
+                        deliveries.acknowledge, app.state.engine, connection, payload
+                    )
                     continue
                 event = normalize_message_event(
                     payload, instance_id=instance_id, expected_bot_id=connection.bot_id
                 )
-                reply = await run_in_threadpool(
-                    gateway.process, app.state.engine, connection, event
-                )
-                if reply is not None:
-                    await ws.send_json(
-                        {
-                            "action": "send_private_msg",
-                            "params": {
-                                "user_id": event.user_id,
-                                "message": [
-                                    {
-                                        "type": "text",
-                                        "data": {
-                                            "text": json.dumps(
-                                                reply, ensure_ascii=False, separators=(",", ":")
-                                            )
-                                        },
-                                    }
-                                ],
-                            },
-                            "echo": str(uuid4()),
-                        }
-                    )
+                await run_in_threadpool(gateway.process, app.state.engine, connection, event)
         except WebSocketDisconnect:
             return
+        except gateway.ConnectionRejected:
+            reason = "auth_changed"
+            await run_in_threadpool(gateway.record_rejection, app.state.engine, connection, 403)
+            await ws.close(code=1008)
         except (ValueError, KeyError, RuntimeError):
+            reason = "protocol_error"
             await run_in_threadpool(gateway.record_rejection, app.state.engine, connection)
             await ws.close(code=1008)
         except Exception:
+            reason = "transport_error"
             logger.error("onebot_request_failed")
             await ws.close(code=1011)
+        finally:
+            # TestClient/server shutdown may cancel this scope before a receive task settles.
+            # Release the fenced lease first, under cancellation shielding.
+            with anyio.CancelScope(shield=True):
+                if receive_task is not None:
+                    receive_task.cancel()
+                try:
+                    await run_in_threadpool(
+                        gateway.close_connection, app.state.engine, connection, reason
+                    )
+                except Exception:
+                    logger.error("onebot_disconnect_record_failed")
+                finally:
+                    if receive_task is not None:
+                        await asyncio.gather(receive_task, return_exceptions=True)

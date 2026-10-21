@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import path from "node:path";
+import { spawn } from "node:child_process";
 
 const root = path.resolve(import.meta.dirname, "../../..");
 async function open(page: Page) {
@@ -628,5 +629,94 @@ test("offline assistant parses without writes and saves a unit-checked pending r
   await page.screenshot({
     path: path.join(root, "output/playwright/offline-mobile.png"),
     fullPage: true,
+  });
+});
+
+test("message monitor shows real reverse connection and durably acknowledged delivery", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf = (await page.context().cookies()).find(
+    (c) => c.name === "erp_csrf",
+  )!.value;
+  const name = "Monitor Bot " + Date.now();
+  const created = await page.request.post("/api/v1/onebot_instances", {
+    headers: { "x-csrf-token": csrf },
+    data: { name, bot_id: "10001" },
+  });
+  expect(created.ok()).toBe(true);
+  const result = await created.json();
+  const script = `import json, sys
+from websockets.sync.client import connect
+value = json.load(sys.stdin)
+with connect("ws://127.0.0.1:8000/onebot/v11/ws/" + value["instance"]["id"], additional_headers={"Authorization": "Bearer " + value["access_token"], "X-Self-ID": "10001", "X-Client-Role": "Universal"}, proxy=None, open_timeout=5) as ws:
+    ws.send(json.dumps({"post_type":"message","self_id":10001,"message_type":"private","sub_type":"friend","time":1,"user_id":30003,"message_id":1,"message":[{"type":"text","data":{"text":"/erp 采购 查询"}}]}))
+    action = json.loads(ws.recv(timeout=5))
+    assert json.loads(action["params"]["message"][0]["data"]["text"])["status"] == "binding_required"
+    ws.send(json.dumps({"status":"ok","retcode":0,"echo":action["echo"],"data":{"message_id":1}}))
+print("ok")
+`;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(path.join(root, ".venv/bin/python"), ["-c", script], {
+      cwd: root,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let output = "";
+    child.stdout.on("data", (data) => {
+      output += String(data);
+    });
+    child.stderr.resume();
+    child.on("error", reject);
+    child.on("exit", (code) =>
+      code === 0 && output.trim() === "ok"
+        ? resolve()
+        : reject(new Error("Loopback OneBot fixture failed")),
+    );
+    child.stdin.end(JSON.stringify(result));
+  });
+  await page.getByRole("button", { name: "消息接入", exact: true }).click();
+  const monitor = page.getByRole("region", {
+    name: "连接与回复监控",
+    exact: true,
+  });
+  const connections = monitor.getByRole("table", {
+    name: "连接状态表",
+    exact: true,
+  });
+  await expect(
+    connections.getByRole("row").filter({ hasText: name }),
+  ).toContainText("离线");
+  const records = monitor.getByRole("table", {
+    name: "回复投递表",
+    exact: true,
+  });
+  await expect(
+    records.getByRole("row").filter({ hasText: name }),
+  ).toContainText("API 成功");
+  await expect(
+    records.getByRole("row").filter({ hasText: name }),
+  ).toContainText("1 / 3");
+  await monitor.getByLabel("投递状态", { exact: true }).selectOption("failed");
+  await expect(
+    monitor.getByText("暂无当前筛选下可见的投递记录。", { exact: true }),
+  ).toBeVisible();
+  await monitor
+    .getByLabel("投递状态", { exact: true })
+    .selectOption("delivered");
+  await expect(
+    records.getByRole("row").filter({ hasText: name }),
+  ).toBeVisible();
+  await monitor.screenshot({
+    path: path.join(root, "output/playwright/monitor-desktop.png"),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await monitor.screenshot({
+    path: path.join(root, "output/playwright/monitor-mobile.png"),
   });
 });
