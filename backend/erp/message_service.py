@@ -12,9 +12,10 @@ from sqlalchemy import or_, select
 
 from . import procurement
 from .audit import digest
+from .intent import parse_fixed_command
+from .local_parser import parse_message
 from .message_models import BindingChallenge, MessageBinding, OneBotInstance
 from .models import Product, User, now, uid
-from .onebot.intent import parse_fixed_command
 from .permissions import Engine, subject
 from .services import data_for, fetch, require
 
@@ -280,9 +281,16 @@ def dispatch(db, event):
             },
             "operation",
         )
-    parsed = parse_fixed_command(event.text)
+    parsed = parse_message(event.text)
     if parsed.intent is None:
-        return user.id, {"status": "unsupported_command"}, "unsupported"
+        return (
+            user.id,
+            {
+                "status": "unsupported_command",
+                "message": "未识别为单条支持的指令，请改用 /erp 固定命令或Web表单；未调用AI。",
+            },
+            "unsupported",
+        )
     if parsed.intent.operation == "create":
         operation = operations.create(
             db, engine, {**parsed.intent.arguments, **parsed.intent.references}, binding

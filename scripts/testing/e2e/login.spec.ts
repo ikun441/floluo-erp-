@@ -524,3 +524,109 @@ test("operation workbench previews, confirms a real draft and cancels partial re
     fullPage: true,
   });
 });
+
+test("offline assistant parses without writes and saves a unit-checked pending request", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf = (await page.context().cookies()).find(
+    (c) => c.name === "erp_csrf",
+  )!.value;
+  const identity = await (await page.request.get("/api/v1/auth/me")).json();
+  const suffix = Date.now().toString();
+  async function catalog(resource: string, data: Record<string, unknown>) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers: { "x-csrf-token": csrf },
+      data: { data: { ...data, owner_id: identity.id } },
+    });
+    expect(response.ok()).toBe(true);
+    return response.json();
+  }
+  const product = await catalog("products", {
+    sku: "local-p-" + suffix,
+    name: "Local Mouse " + suffix,
+    unit: "个",
+  });
+  const supplier = await catalog("suppliers", {
+    code: "local-s-" + suffix,
+    name: "Local Supplier " + suffix,
+  });
+  await page.getByRole("button", { name: "操作工作台", exact: true }).click();
+  const assistant = page.getByRole("region", {
+    name: "离线指令助手",
+    exact: true,
+  });
+  const text = assistant.getByLabel("业务描述", { exact: true });
+  await text.fill(
+    `登记采购2个"${product.name}"，每个12.50元，供应商=${supplier.id}，币种=CNY。`,
+  );
+  await assistant
+    .getByRole("button", { name: "识别描述", exact: true })
+    .click();
+  await expect(
+    assistant.getByRole("heading", {
+      name: "识别结果：发起采购请求",
+      exact: true,
+    }),
+  ).toBeVisible();
+  const before = await page.request.get("/api/v1/message_operations");
+  const beforeIds = (await before.json()).items.map(
+    (r: { id: string }) => r.id,
+  );
+  const saving = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/intents/requests") &&
+      r.request().method() === "POST",
+  );
+  await assistant
+    .getByRole("button", { name: "生成待确认请求", exact: true })
+    .click();
+  const row = await (await saving).json();
+  expect(beforeIds).not.toContain(row.id);
+  expect(row.state).toBe("awaiting_confirmation");
+  expect(row.preview.product.unit).toBe("个");
+  await expect(
+    page.getByRole("heading", { name: "采购草稿预览", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("25.00 CNY", { exact: true })).toBeVisible();
+  const absent = await page.request.get(
+    "/api/v1/purchase_orders/" + row.preview.number.slice(3),
+  );
+  expect(absent.status()).toBe(404);
+  await text.fill(`查询"${product.name}"库存`);
+  await assistant
+    .getByRole("button", { name: "识别描述", exact: true })
+    .click();
+  await expect(
+    assistant.getByRole("heading", { name: "识别结果：查询库存", exact: true }),
+  ).toBeVisible();
+  await assistant
+    .getByRole("button", { name: "执行授权查询", exact: true })
+    .click();
+  await expect(
+    assistant.getByText("当前授权范围内没有匹配记录。", { exact: true }),
+  ).toBeVisible();
+  await text.fill("审批所有采购单");
+  await assistant
+    .getByRole("button", { name: "识别描述", exact: true })
+    .click();
+  await expect(assistant.getByRole("alert")).toContainText("未能识别");
+  await expect(
+    assistant.getByRole("button", { name: "执行授权查询", exact: true }),
+  ).toHaveCount(0);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/offline-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/offline-mobile.png"),
+    fullPage: true,
+  });
+});

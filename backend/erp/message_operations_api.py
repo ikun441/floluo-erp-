@@ -18,11 +18,11 @@ Values = dict[str, Annotated[str, Field(min_length=1, max_length=160)]]
 
 
 class CreateInput(StrictInput):
-    values: Values = Field(default_factory=dict, max_length=5)
+    values: Values = Field(default_factory=dict, max_length=6)
 
 
 class UpdateInput(Version):
-    values: Values = Field(max_length=5)
+    values: Values = Field(max_length=6)
 
 
 class ConfirmInput(Version):

@@ -10,10 +10,10 @@ from sqlalchemy import func, or_, select
 from . import procurement
 from .audit import append, change_summary, digest
 from .business_schemas import OrderInput
+from .intent import parse_fixed_command
 from .message_models import MessageBinding, MessageOperation, OneBotInstance
 from .message_service import utc
 from .models import now, uid
-from .onebot.intent import parse_fixed_command
 from .permissions import LEVEL, RESOURCES
 from .services import data_for, require
 
@@ -24,6 +24,7 @@ KEYS = {
     "quantity": "数量",
     "unit_price": "单价",
     "currency": "币种",
+    "unit": "单位",
 }
 
 
@@ -127,6 +128,10 @@ def prepare(db, engine, row):
     if missing:
         return None, missing
     product = resolve(db, engine, "products", values["product"])
+    if "unit" in values:
+        visible = engine.project("products", data_for(db, "products", product)) or {}
+        if visible.get("unit") != values["unit"] or values["unit"] == "***":
+            raise HTTPException(422, "quantity_unit_unresolved")
     supplier = resolve(db, engine, "suppliers", values["supplier"])
     body = OrderInput.model_validate(
         {
@@ -182,7 +187,9 @@ def prepare(db, engine, row):
         ("supplier", "suppliers", supplier),
     ):
         visible = engine.project(resource, data_for(db, resource, ref)) or {}
-        preview[key] = {k: visible[k] for k in ("id", "name", "sku", "code") if k in visible}
+        preview[key] = {
+            k: visible[k] for k in ("id", "name", "sku", "code", "unit") if k in visible
+        }
     return {"body": body, "digest": fingerprint, "preview": preview}, []
 
 

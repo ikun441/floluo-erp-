@@ -1,5 +1,10 @@
 # OneBot V11 接入与交互状态机
 
+## 未发布：离线中文规则
+
+库存查询与单商品采购描述现可在绑定后的私聊使用，例如「查询一下鼠标还有多少库存」和「登记采购20个鼠标，每个35元」。明确规则匹配失败时提示固定命令/表单，不调用AI。供应商、币种缺失继续走补充流程，单位保留并在当前授权预览/确认时核对商品基础单位。详情见[INTERACTION.md](INTERACTION.md)。Web操作工作台提供同一解析器的识别、结构化结果和受控执行入口。
+
+
 ## v1.0.4 采购请求与Web确认
 
 新增持久化采购请求：消息发起可先缺少字段，使用 `/erp 补充 请求ID 字段=值` 多轮补齐，`/erp 预览 请求ID`获取当前授权预览，`/erp 取消 请求ID`取消。请求10分钟有效，参数/资料/绑定版本变化后旧摘要失效。`/erp 确认 请求ID`只提示进入Web操作工作台复核密码，不能直接创建订单。
@@ -43,6 +48,6 @@
 
 ## 后续范围
 
-尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、连接状态监控后台、本地自然语言规则、消息直接落单和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
+尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、连接状态监控后台、自由自然语言补充、消息直接落单和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
 
 实际验证包含 ASGI WebSocket、真实回环 TCP WebSocket、PostgreSQL 重复消息并发、Web/消息相同数据范围和字段投影。尚未连接真实 QQ/生产 OneBot 实例，也未验证 Docker/Linux/TLS 环境。

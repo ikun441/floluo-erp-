@@ -461,9 +461,13 @@ export default function MessagingView({ api }: { api: Api }) {
         )}
       </section>
       <section className="panel padded">
-        <h2>采购请求命令</h2>
+        <h2>采购请求与离线描述</h2>
         <p className="muted">
           先私聊发起采购请求，再到操作工作台预览。完整确认会创建草稿，后续提交、审批与入库仍按采购规则进行。
+        </p>
+        <p>
+          也可私聊发送「查询一下鼠标还有多少库存」或「登记采购20个鼠标，每个35元」。单位须与商品资料一致，供应商与币种缺失时需要补充。解析失败不会调用
+          AI。
         </p>
         <p>
           <code>/erp 采购 新增 商品=可见商品编码</code>

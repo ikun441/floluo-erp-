@@ -15,6 +15,7 @@ from . import __version__
 from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
+from .intent_api import register as register_intents
 from .message_operations_api import register as register_message_operations
 from .messaging_api import register as register_messaging
 from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
@@ -360,6 +361,7 @@ def create_app(settings=None):
     register_procurement(app, database, authorized_engine)
     register_messaging(app, database, authorized_engine)
     register_message_operations(app, database, authorized_engine)
+    register_intents(app, database, authorized_engine)
     register_onebot(app)
 
     # Explicit registry prevents arbitrary table access through the path parameter.

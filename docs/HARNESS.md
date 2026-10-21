@@ -13,3 +13,6 @@ Procurement boundary fixtures: used an independent clean source worktree so core
 v1.0.3 message UI: an isolated exact-file task timed out at300 seconds; report remained takeover_required, not a successful candidate. A complete MessagingView.tsx was present in the retained worktree. Codex read the entire untrusted file, took over integration, corrected hidden-field guards and password/one-time-secret handling, then ran project TypeScript, formatting, build and real-browser checks. No report status was altered and no digest-gated auto-apply was used; a private SHA256 receipt records the original partial artifact. The timeout is not counted as successful Harness execution. Further retries for this task were stopped.
 
 v1.0.4 OperationsView: an exact-file isolated task timed out at240 seconds and no candidate existed. Codex took over implementation, with no automatic retry or relaxed sandbox. The task was not counted as successful delegation. Core migration, preview/confirmation authorization and transactions remained with Codex.
+
+
+离线规则样例任务：2026-10-21，精确授权tests/fixtures/local_intent_cases.json，180秒超时，两个上游200响应，无候选文件。未应用任何DSH产物，也未放宽沙箱或重试；Codex接管有边界的样例与可信回归测试。此任务不计为成功委派。

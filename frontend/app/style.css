@@ -1029,3 +1029,60 @@ pre {
     max-width: 116px;
   }
 }
+
+.local-intent {
+  margin-bottom: 24px;
+  min-width: 0;
+}
+.local-intent .panel-heading {
+  padding: 0;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.local-intent textarea {
+  width: 100%;
+  margin: 8px 0 12px;
+  min-height: 92px;
+  resize: vertical;
+}
+.local-intent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.local-intent-guide {
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.local-intent-guide summary {
+  cursor: pointer;
+}
+.local-intent-result {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.local-intent-result dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  margin: 16px 0;
+}
+.local-intent-result dl > div {
+  min-width: 100px;
+  max-width: 100%;
+}
+.local-intent-result dt {
+  font-size: 12px;
+  color: var(--muted);
+}
+.local-intent-result dd {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+.local-intent-result h3 {
+  overflow-wrap: anywhere;
+}

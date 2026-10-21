@@ -60,10 +60,21 @@
 ## v1.0.4 操作工作台
 
 - GET `/api/v1/message_operations?state=&limit=50&after=`：仅自身且经策略过滤的元数据，limit≤100，游标要求ID可读。state只允许collecting_missing/awaiting_confirmation/completed/cancelled/expired。列表不直接返回业务结果ID。
-- POST `/api/v1/message_operations`：`{values:{product?,supplier?,quantity?,unit_price?,currency?}}`，值均为字符串，最多5个白名单键。无owner/role/resource等客户端身份参数；返回当前授权详情。
+- POST `/api/v1/message_operations`：`{values:{product?,supplier?,quantity?,unit_price?,currency?,unit?}}`，值均为字符串，最多6个白名单键（unit为本轮新增可选键）。无owner/role/resource等客户端身份参数；返回当前授权详情。
 - GET `/api/v1/message_operations/{id}`：当前元数据、missing_fields及可授权preview/preview_digest；资料变化时刷新摘要与version，客户端不能沿用旧版本。终态按当前采购权限投影result/result_id。
 - PATCH 同路径：`{version,values:{...}}`补充或修改等待态参数；不提交空字符串清除字段。
 - POST `/api/v1/message_operations/{id}/cancel`：`{version}`。
 - POST `/api/v1/message_operations/{id}/confirm`：`{version,preview_digest,password}`，经过现有会话、CSRF、Origin及密码复核，仅创建采购draft。重复确认使用原确认version/digest，重新授权后返回同一记录；不重复业务写入。
 
 详情预览需要message_operations.preview可读及全部关键采购金额字段可读；更新参数需preview可写，取消/确认需state可写。409用于旧版本/旧摘要/终态冲突，403用于当前授权、绑定或预览不足。请求固定10分钟，单用户最多20条等待态。密码复核限流/锁定沿用统一认证保护。详见OPERATIONS.md。
+
+
+## 离线解析接口（未发布）
+
+以下三个POST均只接受`{text: string}`，1–4096字符，拒绝额外键；要求当前会话与CSRF/Origin。没有数据库字段、SQL、身份或模型参数入口。
+
+- `/api/v1/intents/parse`：只返回`{intent,missing}`，intent包含operation/resource/arguments/references/confidence/parser_source；不查询业务数据，不生成请求或订单。
+- `/api/v1/intents/query`：后端重新解析且只允许query，复用当前用户采购/库存受控查询，最多20条，统一数据范围及字段投影。
+- `/api/v1/intents/requests`：后端重新解析且只允许采购create，复用持久化请求和当前权限；仅返回请求详情。仍须原有confirm接口复核密码才能创建draft。
+
+不识别/类型不匹配为422；单位不可读或与商品不一致统一422 quantity_unit_unresolved。规则与边界详见[INTERACTION.md](INTERACTION.md)。不增加新角色权限，也不会扩展旧角色授权。

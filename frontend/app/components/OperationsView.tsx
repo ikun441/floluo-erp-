@@ -1,9 +1,10 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import LocalIntentPanel from "./LocalIntentPanel";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 type Api = (path: string, init?: RequestInit) => Promise<unknown>;
-type Ref = { id?: string; name?: string; sku?: string };
+type Ref = { id?: string; name?: string; sku?: string; unit?: string };
 type Operation = {
   id?: string;
   version?: number;
@@ -37,6 +38,7 @@ const fields: Record<string, string> = {
   quantity: "数量",
   unit_price: "单价",
   currency: "币种",
+  unit: "单位（可选，须与商品一致）",
 };
 async function call<T>(api: Api, path: string, init?: RequestInit) {
   return (await api(path, init)) as T;
@@ -86,8 +88,10 @@ function Inputs({ api }: { api: Api }) {
           ) : (
             <input
               name={key}
-              maxLength={key === "currency" ? 3 : 40}
-              inputMode={key === "currency" ? "text" : "decimal"}
+              maxLength={key === "currency" ? 3 : key === "unit" ? 30 : 40}
+              inputMode={
+                key === "currency" || key === "unit" ? "text" : "decimal"
+              }
               placeholder={
                 key === "currency"
                   ? "如 CNY，请明确填写"
@@ -246,6 +250,7 @@ export default function OperationsView({ api }: { api: Api }) {
           发起采购请求
         </button>
       </div>
+      <LocalIntentPanel api={api} onCreated={saved} />
       <Failure error={error || list.error} />
       {creating && (
         <section className="panel padded" aria-label="新建采购请求">
@@ -401,7 +406,9 @@ export default function OperationsView({ api }: { api: Api }) {
                       {row.preview.supplier.name ?? row.preview.supplier.id}
                     </dd>
                     <dt>数量</dt>
-                    <dd>{row.preview.quantity}</dd>
+                    <dd>
+                      {row.preview.quantity} {row.preview.product.unit ?? ""}
+                    </dd>
                     <dt>单价</dt>
                     <dd>
                       {row.preview.unit_price} {row.preview.currency}

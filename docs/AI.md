@@ -7,3 +7,6 @@ AI 默认关闭；配置 base_url/model/secret reference/timeout；支持内网�
 状态：local_failed → consent_required → parsing → schema_validation → preview → confirm → reauthorize → execute。任何步骤失败均不自动执行。提示注入作为数据处理，AI 不访问数据库凭据/隐藏字段/内部配置。
 
 Harness 是开发辅助工具，与产品 AI 无关。隔离网关验证见 HARNESS.md；不得将开发网关当作 ERP 的运行依赖。
+
+
+离线规则现已实现（未发布切片，见INTERACTION.md）：固定命令优先，严格本地句式其次；不支持的输入返回固定命令/表单指引。尚未实现用户同意、外部模型解析或AI查询网关，不能把本地意图接口当作已交付的AI能力。
