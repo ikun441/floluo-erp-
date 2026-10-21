@@ -282,9 +282,7 @@ def test_durable_replay_collision_expiry_and_no_message_writes(env):
         == "bound"
     )
     create = message("/erp 采购 新增 商品=mouse 数量=2 单价=5 供应商=s 币种=CNY", 3)
-    assert (
-        message_gateway.process(env["engine"], conn, normalized(create))["status"] == "web_required"
-    )
+    assert message_gateway.process(env["engine"], conn, normalized(create))["status"] == "denied"
     with Session(env["engine"]) as db:
         assert db.scalar(select(func.count()).select_from(MessageInbox)) == 3
         assert verify(db)

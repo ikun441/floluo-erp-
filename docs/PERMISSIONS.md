@@ -33,3 +33,11 @@
 实例连接认证与 ERP 绑定身份不同：可信协议源提供平台身份，单次挑战将其映射到 ERP 当前用户；每条业务查询重新构建 Subject 和策略引擎。消息查询复用采购/库存 SQL 范围与字段投影，用户无法提供角色/部门替代服务端主体。群聊不返回业务结果。升级不修改既有策略，新资源仍默认拒绝。
 
 修正 requires_approval 的读取路径：SQL 列表范围排除任何匹配的待审批允许策略，详情投影同样拒绝；Web 与消息一致。在通用审批回执机制完成前，这类读取不返回记录。
+
+## v1.0.4 确认请求
+
+message_operations是独立注册资源，支持read/create/update/cancel/confirm、own范围。旧策略不自动增加权限。服务端始终限定当前owner；平台请求额外限定原binding ID/version，平台身份不能提供ERP主体。
+
+preview字段控制参数写入与完整预览展示，state字段控制显式取消/确认。展示预览前重查业务create/read和引用范围；完整关键金额不可读时拒绝预览。刷新导致version变化后再次决策，避免旧读权限继续展示。业务result/result_id只在当前采购读取范围及字段投影允许时返回，列表不直接暴露result_id。created_at/expires_at/preview/result等虚拟字段不能用作SQL条件AST。
+
+确认检查原参数摘要和资料版本并在创建后提交前复核；重放再次要求当前create权限并投影当前可见结果。requires_approval仍拒绝执行，不把请求确认当作通用审批。

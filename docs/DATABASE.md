@@ -41,8 +41,8 @@ Phase 2具体关系、精度、状态与幂等规则见PROCUREMENT.md；新增�
 
 关系：OneBotInstance 1—N MessageBinding N—1 User；OneBotInstance 1—N BindingChallenge N—1 User；OneBotInstance 1—N MessageInbox。先持有 authorization_gate 再访问这些记录，策略与消息操作共享现有事务授权边界。新资源默认拒绝，升级不自动扩大原有策略。
 
-## v1.0.4 消息操作会话（实现前设计）
+## v1.0.4 消息操作会话
 
-新增 `message_operation`：Row UUID/UTC时间/version；owner_id → User，binding_id → MessageBinding，保存签发时binding_version；resource固定purchase_orders；payload仅存白名单采购参数，不存原始消息、密码或连接令牌；target_order_id唯一预留ID，result_id → PurchaseOrder且唯一；状态 collecting_missing / awaiting_confirmation / completed / cancelled / expired；expires_at；preview_digest及引用资料版本摘要。
+新增 `message_operation`：Row UUID/UTC时间/version；owner_id → User，binding_id → MessageBinding，保存签发时binding_version；resource固定purchase_orders；payload仅存白名单采购参数，不存原始消息、密码或连接令牌；target_order_id唯一预留ID，result_id → PurchaseOrder且唯一；状态 collecting_missing / awaiting_confirmation / completed / cancelled / expired；expires_at；preview_digest覆盖引用资料版本。
 
-One MessageBinding 1—N MessageOperation；User 1—N MessageOperation；完成的MessageOperation 1—1 PurchaseOrder。创建请求不创建订单。预览用同一非写入采购校验计划构建，执行仍走采购服务。确认同时检查会话version、摘要、当前绑定、当前主体/策略、引用资料版本，订单/会话完成/outbox/审计同事务。完成回放不得重复写入，结果按当前权限投影。只有归属用户可查看/补充/取消/确认，仍需统一策略授权；过期按访问时推进，不引入后台服务必需依赖。含任何新会话数据时拒绝破坏性迁移降级。
+Web发起时binding_id/binding_version为空，消息发起时保存有效绑定版本。One MessageBinding 1—N MessageOperation；User 1—N MessageOperation；完成的MessageOperation 1—1 PurchaseOrder。创建请求不创建订单。预览用同一非写入采购校验计划构建，执行仍走采购服务。确认同时检查会话version、摘要、当前绑定、当前主体/策略、引用资料版本，订单/会话完成/outbox/审计同事务。完成回放不得重复写入，结果按当前权限投影。只有归属用户可查看/补充/取消/确认，仍需统一策略授权；过期按访问时推进，不引入后台服务必需依赖。含任何新会话数据时拒绝破坏性迁移降级。

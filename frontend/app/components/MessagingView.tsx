@@ -198,7 +198,7 @@ export default function MessagingView({ api }: { api: Api }) {
           <h1>消息机器人</h1>
           <p className="muted">
             管理 OneBot V11 实例与我的 QQ 绑定。消息查询复用 ERP
-            权限；群聊不回复，消息写入尚未开放。
+            权限；采购请求可在操作工作台预览并复核密码确认，群聊不回复。
           </p>
         </div>
       </div>
@@ -459,6 +459,26 @@ export default function MessagingView({ api }: { api: Api }) {
             </table>
           </div>
         )}
+      </section>
+      <section className="panel padded">
+        <h2>采购请求命令</h2>
+        <p className="muted">
+          先私聊发起采购请求，再到操作工作台预览。完整确认会创建草稿，后续提交、审批与入库仍按采购规则进行。
+        </p>
+        <p>
+          <code>/erp 采购 新增 商品=可见商品编码</code>
+        </p>
+        <p>
+          <code>
+            /erp 补充 请求ID 数量=2 单价=12.50 供应商=可见供应商编码 币种=CNY
+          </code>
+        </p>
+        <p>
+          <code>/erp 预览 请求ID</code> · <code>/erp 取消 请求ID</code>
+        </p>
+        <p className="muted">
+          请求10分钟过期。消息中的确认命令会提示转Web复核密码，不会直接创建订单。
+        </p>
       </section>
       <section className="panel padded">
         <h2>反向 WebSocket 接入</h2>

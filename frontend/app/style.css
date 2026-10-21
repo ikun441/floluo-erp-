@@ -973,3 +973,59 @@ pre {
   height: 100%;
   object-fit: contain;
 }
+
+.operations-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: 24px;
+  align-items: start;
+}
+.operation-preview {
+  margin: 22px 0;
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.operation-preview dl {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 16px;
+}
+.operation-preview dd,
+.operations-layout code {
+  overflow-wrap: anywhere;
+}
+.operations-layout details,
+.operations-layout .business-form {
+  margin: 20px 0;
+}
+@media (max-width: 1100px) {
+  .operations-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.operations-heading {
+  flex-wrap: wrap;
+}
+.operations-heading > button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .operations-layout .panel-heading {
+    flex-wrap: wrap;
+  }
+  .operations-layout .panel-heading h2 {
+    flex-basis: 100%;
+    white-space: nowrap;
+  }
+  .operations-layout th,
+  .operations-layout td {
+    padding: 14px 12px;
+  }
+  .operations-layout td:first-child {
+    max-width: 116px;
+  }
+}

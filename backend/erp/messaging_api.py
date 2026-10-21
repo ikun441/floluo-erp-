@@ -1,6 +1,5 @@
 """Web control plane for protocol instances and own platform bindings."""
 
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends, Request, Response
@@ -9,11 +8,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import message_service as service
-from .audit import change_summary, digest
+from . import reauthentication
+from .audit import change_summary
 from .message_models import MessageBinding, OneBotInstance
-from .models import Throttle, User, now
+from .models import User
 from .permissions import Engine
-from .services import PASSWORDS, data_for
+from .services import data_for
 
 
 class StrictInput(BaseModel):
@@ -171,28 +171,14 @@ def register(app, database, authorized_engine):
             "instance_id": body.instance_id,
             "operation": "binding_challenge",
         }
-        time = now()
-        throttle = db.get(Throttle, digest("binding-challenge:" + user.id))
-        if throttle is None:
-            throttle = Throttle(
-                key=digest("binding-challenge:" + user.id), failures=0, window_start=time
-            )
-            db.add(throttle)
-        if service.utc(throttle.window_start) + timedelta(minutes=1) <= time:
-            throttle.failures, throttle.window_start = 0, time
-        if throttle.failures >= 5:
-            response.status_code = request.state.status = 429
-            return {"detail": "login_temporarily_unavailable"}
-        throttle.failures += 1
-        if user.locked_until and service.utc(user.locked_until) > now():
-            response.status_code = request.state.status = 429
-            return {"detail": "login_temporarily_unavailable"}
-        if not PASSWORDS.verify(body.password, user.password_hash):
-            user.failed_logins += 1
-            if user.failed_logins >= 5:
-                user.locked_until = now() + timedelta(minutes=15)
-            response.status_code = request.state.status = 403
-            return {"detail": "invalid_credentials"}
+        status = reauthentication.verify(db, user, body.password, "binding-challenge")
+        if status:
+            response.status_code = request.state.status = status
+            return {
+                "detail": "login_temporarily_unavailable"
+                if status == 429
+                else "invalid_credentials"
+            }
         result = service.issue_challenge(db, engine, body.instance_id, body.platform_user_id)
         user.failed_logins, user.locked_until = 0, None
         return result

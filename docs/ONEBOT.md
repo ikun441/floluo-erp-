@@ -1,6 +1,12 @@
 # OneBot V11 接入与交互状态机
 
-## v1.0.3 当前实现
+## v1.0.4 采购请求与Web确认
+
+新增持久化采购请求：消息发起可先缺少字段，使用 `/erp 补充 请求ID 字段=值` 多轮补齐，`/erp 预览 请求ID`获取当前授权预览，`/erp 取消 请求ID`取消。请求10分钟有效，参数/资料/绑定版本变化后旧摘要失效。`/erp 确认 请求ID`只提示进入Web操作工作台复核密码，不能直接创建订单。
+
+工作台支持Web发起、列表筛选/分页、当前预览、参数补充、取消、密码确认。预览复用无写入采购计划，确认只创建draft；仍需后续提交、独立审批和入库。消息来源保存绑定版本，解绑再重绑不能恢复旧请求。详见[操作工作台](OPERATIONS.md)，版本日志见[docx/version.md](../docx/version.md)。
+
+## 连接基础（始于v1.0.3）
 
 支持反向 Universal WebSocket：OneBot 客户端主动连接 ERP 的 `/onebot/v11/ws/{instance_id}`。实例固定 bot ID，管理员在 Web「消息接入」创建实例后只收到一次随机访问令牌；数据库仅存 SHA-256 摘要。握手必须携带 `Authorization: Bearer <token>`、`X-Self-ID`、`X-Client-Role: Universal`。不接受 URL 查询参数或浏览器 Origin。令牌不能放在 URL、日志或策略 JSON 中。
 
@@ -23,7 +29,7 @@
 
 - `/erp 库存 查询 "Mouse A"`：在有 name/id 读取权限的商品范围中匹配名称，复用 Web 库存关联范围及字段投影，最多返回20条。
 - `/erp 采购 查询 [单号]`：复用 Web 采购关联范围及金额投影，最多返回20条；按单号过滤前必须具备单号可读权限。
-- `/erp 采购 新增 商品=mouse 数量=20 单价=35 供应商=example 币种=CNY`：仅生成受限结构化意图。缺失字段会明确返回；当前消息写入未开放，完整意图也会要求通过 Web 操作。
+- `/erp 采购 新增 商品=mouse 数量=20 单价=35 供应商=example 币种=CNY`：仅生成受限结构化意图。缺失字段会明确返回；本版完整意图建立待确认请求，须通过Web预览及密码复核后创建草稿。
 
 所有群聊业务消息均无回复、无业务执行；不会把私密结果发到群里。仅私聊且当前绑定有效、用户启用并具备 bindings.use 时可进入业务查询。权限变更、显式拒绝、字段隐藏/脱敏和需要审批的读取，均在当前数据库策略下重新判断；没有缓存旧数据供重放。
 
@@ -37,6 +43,6 @@
 
 ## 后续范围
 
-尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、连接状态监控后台、本地自然语言规则、多轮补充、参数预览/确认/取消/过期会话、消息写入、额外高风险身份确认和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
+尚未实现主动连接 OneBot 正向 WebSocket、独立 API/Event 双连接、连接状态监控后台、本地自然语言规则、消息直接落单和 AI。目标会话仍为 idle → parsing → collecting_missing → preview → awaiting_confirmation → executing → completed；等待态允许取消/超时，确认必须绑定参数摘要、当前主体、实例与有效期，执行前重查权限和资源状态。
 
 实际验证包含 ASGI WebSocket、真实回环 TCP WebSocket、PostgreSQL 重复消息并发、Web/消息相同数据范围和字段投影。尚未连接真实 QQ/生产 OneBot 实例，也未验证 Docker/Linux/TLS 环境。

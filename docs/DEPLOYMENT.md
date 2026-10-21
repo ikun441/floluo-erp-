@@ -33,3 +33,9 @@ Redis、Celery 和 outbox 在需要后台任务时随对应模块加入，Phase 
 OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实例ID>`，按ONEBOT.md配置Bearer和bot标识。Nginx示例包含WebSocket Upgrade转发；后端新增websockets运行依赖，容器限制帧大小为65536。令牌通过已授权Web创建/轮换生成，不写入Compose或仓库。客户端负责断线重连；当前ERP不主动拨号OneBot。
 
 本地真实TCP与ASGI测试不能代替真实OneBot客户端、生产Nginx/TLS或Docker镜像验收。收件箱/挑战默认保留，暂无清理后台；需规划容量，清理去重记录会改变重放保证。
+
+## v1.0.4 会话迁移
+
+新增9c8b7a6d5e4f，在原消息身份迁移之后创建操作会话。先备份并在副本验收后执行alembic upgrade head；存在会话时拒绝破坏性降级。没有新增外部服务或环境密钥依赖。旧角色需显式授权message_operations，详见OPERATIONS.md。
+
+会话过期由访问时检查推进，不依赖Celery/Redis；保留历史以支持重放与审计，目前没有自动清理后台。版本更新日志主文件为docx/version.md，保留文件名与Markdown格式。

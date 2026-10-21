@@ -194,7 +194,8 @@ def emit(db, row, event):
     db.add(Outbox(event_type=event, aggregate_id=row.id, payload={"version": row.version}))
 
 
-def draft(db, engine, body, existing=None):
+def prepare_draft(db, engine, body, existing=None, new_id=None):
+    """Build and authorize a transient draft plan without persisting business records."""
     if existing:
         check_version(existing, body.version)
         if existing.status != "draft":
@@ -224,8 +225,8 @@ def draft(db, engine, body, existing=None):
     if total > MAX_MONEY:
         raise HTTPException(422, "order_amount_overflow")
     row = existing or PurchaseOrder(
-        id=uid(),
-        number="PO-" + uid(),
+        id=new_id or uid(),
+        number="PO-" + (new_id or uid()),
         owner_id=engine.who.id,
         department_id=engine.who.department_id,
         status="draft",
@@ -249,6 +250,11 @@ def draft(db, engine, body, existing=None):
     if existing:
         require(engine.authorize("purchase_orders", action, order_data(db, row)), fields)
     require(engine.authorize("purchase_orders", action, values), fields)
+    return row, values, lines
+
+
+def draft(db, engine, body, existing=None, new_id=None):
+    row, values, lines = prepare_draft(db, engine, body, existing, new_id)
     for key, value in values.items():
         setattr(row, key, value)
     db.add(row)

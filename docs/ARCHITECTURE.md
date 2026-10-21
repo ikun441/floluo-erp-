@@ -36,3 +36,7 @@ procurement_api仅适配请求/响应，procurement服务统一执行草稿、�
 ## v1.0.3 消息切片
 
 OneBot transport → message_gateway（Gate、事务、收件箱和审计）→ message_service（绑定/受控查询）→ 已有采购范围与投影/权限引擎。适配器不读写数据库、不解释ERP角色。Web messaging_api调用相同身份服务和统一权限资源。当前只实现反向Universal与私聊只读工具，AI和消息写入不参与核心启动。
+
+## v1.0.4 预览与执行分离
+
+Web/OneBot → message_operations应用服务 → procurement.prepare_draft纯计划/统一权限 → Web密码复核后procurement.draft。预览与执行共用校验逻辑，参数及引用版本摘要将用户所见与提交内容绑定；版本或绑定变化后重新预览。MessageOperation持久化收集/确认/取消/过期/完成状态，消息适配器不直接写业务数据。新增操作工作台连接真实API；版本日志迁至docx/version.md。

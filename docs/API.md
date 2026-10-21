@@ -56,3 +56,14 @@
 - POST `/api/v1/message_binding_challenges`：`{instance_id, platform_user_id, password}`，复核当前密码后返回 `{command, expires_at}`；挑战5分钟、指定实例/平台账号、单次使用。
 - POST `/api/v1/message_bindings/{id}/revoke`：`{version}`，只允许撤销自身且具有 revoke 权限的绑定。
 - WebSocket `/onebot/v11/ws/{instance_id}`：反向 Universal 接入，不使用 Web Cookie 授权。必须 Bearer 令牌与固定 bot 标识；详见 ONEBOT.md。当前业务工具只有只读采购/库存查询，写入意图不执行。
+
+## v1.0.4 操作工作台
+
+- GET `/api/v1/message_operations?state=&limit=50&after=`：仅自身且经策略过滤的元数据，limit≤100，游标要求ID可读。state只允许collecting_missing/awaiting_confirmation/completed/cancelled/expired。列表不直接返回业务结果ID。
+- POST `/api/v1/message_operations`：`{values:{product?,supplier?,quantity?,unit_price?,currency?}}`，值均为字符串，最多5个白名单键。无owner/role/resource等客户端身份参数；返回当前授权详情。
+- GET `/api/v1/message_operations/{id}`：当前元数据、missing_fields及可授权preview/preview_digest；资料变化时刷新摘要与version，客户端不能沿用旧版本。终态按当前采购权限投影result/result_id。
+- PATCH 同路径：`{version,values:{...}}`补充或修改等待态参数；不提交空字符串清除字段。
+- POST `/api/v1/message_operations/{id}/cancel`：`{version}`。
+- POST `/api/v1/message_operations/{id}/confirm`：`{version,preview_digest,password}`，经过现有会话、CSRF、Origin及密码复核，仅创建采购draft。重复确认使用原确认version/digest，重新授权后返回同一记录；不重复业务写入。
+
+详情预览需要message_operations.preview可读及全部关键采购金额字段可读；更新参数需preview可写，取消/确认需state可写。409用于旧版本/旧摘要/终态冲突，403用于当前授权、绑定或预览不足。请求固定10分钟，单用户最多20条等待态。密码复核限流/锁定沿用统一认证保护。详见OPERATIONS.md。

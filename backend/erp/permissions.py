@@ -17,7 +17,7 @@ from .business_models import (
     SystemConfiguration,
     Warehouse,
 )
-from .message_models import MessageBinding, OneBotInstance
+from .message_models import MessageBinding, MessageOperation, OneBotInstance
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
 from .schemas import Rule
 
@@ -230,6 +230,30 @@ RESOURCES.update(
             "owner_id",
         ),
     }
+)
+
+
+RESOURCES["message_operations"] = Resource(
+    MessageOperation,
+    frozenset(
+        {
+            "id",
+            "version",
+            "owner_id",
+            "binding_id",
+            "resource",
+            "state",
+            "result_id",
+            "created_at",
+            "expires_at",
+            "preview",
+            "missing_fields",
+            "result",
+        }
+    ),
+    frozenset({"read", "create", "update", "cancel", "confirm"}),
+    "owner_id",
+    virtual_fields=frozenset({"created_at", "expires_at", "preview", "missing_fields", "result"}),
 )
 
 

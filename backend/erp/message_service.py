@@ -1,9 +1,10 @@
-"""Application services for message identity and read-only business tools.
+"""Application services for message identity and controlled command routing.
 
 Callers hold authorization_gate for the whole transaction. Protocol adapters never query DB.
 """
 
 import secrets
+import shlex
 from datetime import UTC, timedelta
 
 from fastapi import HTTPException
@@ -236,9 +237,65 @@ def dispatch(db, event):
         raise HTTPException(403, "permission_denied")
     engine = Engine(db, subject(db, user))
     require(engine.authorize("message_bindings", "use", data_for(db, "message_bindings", binding)))
+    # Imported lazily: the operation application service reuses identity utilities from this module.
+    from . import message_operations as operations
+
+    try:
+        controls = shlex.split(event.text)
+    except ValueError:
+        controls = []
+    if (
+        len(controls) >= 3
+        and controls[0] == "/erp"
+        and controls[1] in {"补充", "预览", "取消", "确认"}
+    ):
+        action = (
+            "update" if controls[1] == "补充" else "cancel" if controls[1] == "取消" else "read"
+        )
+        operation = operations.load(db, engine, controls[2], action)
+        if operation.binding_id != binding.id or operation.binding_version != binding.version:
+            raise HTTPException(404, "record_not_found")
+        if controls[1] == "补充":
+            parsed = parse_fixed_command(shlex.join(["/erp", "采购", "新增", *controls[3:]]))
+            if parsed.intent is None or len(controls) == 3:
+                raise HTTPException(422, "invalid_operation_values")
+            operations.update(
+                db,
+                engine,
+                operation,
+                {**parsed.intent.arguments, **parsed.intent.references},
+                operation.version,
+            )
+        elif len(controls) != 3:
+            raise HTTPException(422, "invalid_operation_values")
+        elif controls[1] == "取消":
+            operations.cancel(db, engine, operation, operation.version)
+        result = operations.view(db, engine, operation)
+        return (
+            user.id,
+            {
+                "status": "web_confirmation_required" if controls[1] == "确认" else "operation",
+                "operation": result,
+                "message": "在Web操作工作台复核密码后才能创建采购草稿。",
+            },
+            "operation",
+        )
     parsed = parse_fixed_command(event.text)
     if parsed.intent is None:
         return user.id, {"status": "unsupported_command"}, "unsupported"
+    if parsed.intent.operation == "create":
+        operation = operations.create(
+            db, engine, {**parsed.intent.arguments, **parsed.intent.references}, binding
+        )
+        return (
+            user.id,
+            {
+                "status": "operation",
+                "operation": operations.view(db, engine, operation),
+                "message": "在Web操作工作台预览并复核密码确认；可用 /erp 补充 或 /erp 取消 加请求ID。",
+            },
+            "operation",
+        )
     if parsed.missing:
         return user.id, {"status": "missing_fields", "fields": list(parsed.missing)}, "incomplete"
     return user.id, query_business(db, engine, parsed.intent), "processed"

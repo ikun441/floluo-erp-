@@ -400,3 +400,127 @@ test("message control plane persists instances and clears one-time secrets", asy
     fullPage: true,
   });
 });
+
+test("operation workbench previews, confirms a real draft and cancels partial requests", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf = (await page.context().cookies()).find(
+    (c) => c.name === "erp_csrf",
+  )!.value;
+  const identity = await (await page.request.get("/api/v1/auth/me")).json();
+  const suffix = String(Date.now());
+  async function catalog(resource: string, data: Record<string, unknown>) {
+    const r = await page.request.post("/api/v1/" + resource, {
+      headers: { "x-csrf-token": csrf },
+      data: { data: { ...data, owner_id: identity.id } },
+    });
+    expect(r.status()).toBe(200);
+    return r.json();
+  }
+  const product = await catalog("products", {
+    sku: "operation-p-" + suffix,
+    name: "Operation Product " + suffix,
+    unit: "piece",
+  });
+  const supplier = await catalog("suppliers", {
+    code: "operation-s-" + suffix,
+    name: "Operation Supplier " + suffix,
+  });
+  await page.getByRole("button", { name: "操作工作台", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "操作工作台", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "发起采购请求", exact: true }).click();
+  const editor = page.getByRole("region", {
+    name: "新建采购请求",
+    exact: true,
+  });
+  await editor.getByLabel("商品", { exact: true }).selectOption(product.id);
+  await editor.getByLabel("供应商", { exact: true }).selectOption(supplier.id);
+  await editor.getByLabel("数量", { exact: true }).fill("2");
+  await editor.getByLabel("单价", { exact: true }).fill("12.50");
+  await editor.getByLabel("币种", { exact: true }).fill("CNY");
+  const creating = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/message_operations") &&
+      r.request().method() === "POST",
+  );
+  await editor.getByRole("button", { name: "保存请求", exact: true }).click();
+  const operation = await (await creating).json();
+  expect(operation.state).toBe("awaiting_confirmation");
+  await expect(
+    page.getByRole("heading", { name: "采购草稿预览", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("25.00 CNY", { exact: true })).toBeVisible();
+  await page.screenshot({
+    path: path.join(root, "output/playwright/operations-desktop.png"),
+    fullPage: true,
+  });
+  const before = await page.request.get(
+    "/api/v1/purchase_orders/" + operation.preview.number.slice(3),
+  );
+  expect(before.status()).toBe(404);
+  const confirm = page.getByRole("form", { name: "确认请求", exact: true });
+  await confirm.getByLabel("当前 ERP 密码", { exact: true }).fill("incorrect");
+  const wrong = page.waitForResponse(
+    (r) => r.url().endsWith("/confirm") && r.request().method() === "POST",
+  );
+  await confirm
+    .getByRole("button", { name: "确认创建采购草稿", exact: true })
+    .click();
+  expect((await wrong).status()).toBe(403);
+  await expect(
+    confirm.getByLabel("当前 ERP 密码", { exact: true }),
+  ).toHaveValue("");
+  await confirm
+    .getByLabel("当前 ERP 密码", { exact: true })
+    .fill("Browser-fixture-" + "x".repeat(20));
+  const confirmed = page.waitForResponse(
+    (r) => r.url().endsWith("/confirm") && r.request().method() === "POST",
+  );
+  await confirm
+    .getByRole("button", { name: "确认创建采购草稿", exact: true })
+    .click();
+  const done = await (await confirmed).json();
+  expect(done.state).toBe("completed");
+  await expect(
+    page.getByRole("heading", { name: "采购草稿已创建", exact: true }),
+  ).toBeVisible();
+  const order = await page.request.get(
+    "/api/v1/purchase_orders/" + done.result_id,
+  );
+  expect((await order.json()).total).toBe("25.00");
+  await page.getByRole("button", { name: "发起采购请求", exact: true }).click();
+  const partial = page.getByRole("region", {
+    name: "新建采购请求",
+    exact: true,
+  });
+  await partial.getByLabel("商品", { exact: true }).selectOption(product.id);
+  await partial.getByRole("button", { name: "保存请求", exact: true }).click();
+  await expect(page.getByText("还需补充：", { exact: false })).toBeVisible();
+  await page
+    .getByRole("region", { name: "我的请求", exact: true })
+    .getByRole("row")
+    .filter({ has: page.getByRole("cell", { name: "待补充", exact: true }) })
+    .getByRole("button", { name: "取消请求", exact: true })
+    .click();
+  await expect(
+    page.getByText("该请求不会创建订单，如需操作请重新发起。", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("请求状态", { exact: true }).selectOption("cancelled");
+  await expect(
+    page.getByRole("cell", { name: "已取消", exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/operations-mobile.png"),
+    fullPage: true,
+  });
+});

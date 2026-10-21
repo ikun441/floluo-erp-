@@ -1,4 +1,4 @@
-# 弗洛洛 ERP · v1.0.3 开发版
+# 弗洛洛 ERP · v1.0.4 开发版
 
 <img src="frontend/public/brand/floluo-logo.png" alt="弗洛洛 ERP Logo" width="144" height="144">
 
@@ -6,7 +6,7 @@
 
 已实现：真实登录与服务端会话、多角色用户和组织管理、默认拒绝的权限引擎、数据范围与字段约束、策略版本发布与模拟、审计链、商品及分类、供应商、仓库基础资料，以及连接真实 API 的 Next.js 管理界面。登录页包含本地生成的 Three.js 3D 场景与 Motion 动效。
 
-采购已支持草稿、独立审批、分批入库及库存流水。OneBot 已支持反向 Universal WebSocket、密码复核的单次账号绑定、持久化去重，以及复用权限引擎的采购/库存私聊查询。消息写入、确认会话、正向 WebSocket 和 AI 尚未实现。通用审批工作流、销售报表也尚未实现；不提供伪成功接口或演示订单。项目 Logo 使用用户提供的 Q 版原图，详见 [品牌资源](docs/BRANDING.md)。
+采购已支持草稿、独立审批、分批入库及库存流水。OneBot 已支持反向 Universal WebSocket、密码复核的单次账号绑定、持久化去重，以及复用权限引擎的采购/库存私聊查询。新增操作工作台：消息/Web均可发起采购请求、补充和取消，Web预览并复核密码后创建真实草稿；请求10分钟过期，确认检查当前权限、摘要与资料/绑定版本。正向WebSocket和AI尚未实现。通用审批工作流、销售报表也尚未实现；不提供伪成功接口或演示订单。项目 Logo 使用用户提供的 Q 版原图，详见 [品牌资源](docs/BRANDING.md)。
 
 首次使用采购前，需由已授权管理员在Web明确配置支持币种和税模式；默认未配置时拒绝提交。审批人默认必须与创建人不同。
 
@@ -83,6 +83,8 @@ npm run e2e
 
 ## 项目说明
 
+版本更新日志统一维护在 [docx/version.md](docx/version.md)。
+
 - [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [权限模型](docs/PERMISSIONS.md)
-- [采购设计与当前范围](docs/PROCUREMENT.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
+- [操作工作台](docs/OPERATIONS.md) · [采购设计与当前范围](docs/PROCUREMENT.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
 - [登录设计](docs/LOGIN_DESIGN.md) · [Harness](docs/HARNESS.md) · [实施与验证记录](docs/IMPLEMENTATION.md)

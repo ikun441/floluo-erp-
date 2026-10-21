@@ -1,5 +1,7 @@
 # Changelog
 
+从v1.0.4起，版本更新日志统一维护在 [docx/version.md](../docx/version.md)。下文保留已发布版本历史。
+
 ## 1.0.3 — 消息接入开发版（2026-10-21）
 
 - 新增独立OneBot V11反向Universal WebSocket，实例/Bearer/bot身份校验、帧限制、实例停用和令牌轮换；不存储令牌原文。

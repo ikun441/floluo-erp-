@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import OperationsView from "./components/OperationsView";
 import MessagingView from "./components/MessagingView";
 import LoginView from "./components/LoginView";
 import ProcurementView, {
@@ -128,6 +129,14 @@ const errorMessages: Record<string, string> = {
   order_not_approved: "当前采购单尚未批准或已完成入库",
   invalid_order_transition: "当前订单状态不支持此操作",
   field_write_denied: "当前账号没有部分字段的修改权限",
+  preview_stale: "资料或参数已变化，请刷新预览并重新确认",
+  preview_read_denied: "当前权限无法完整展示确认预览",
+  operation_terminal: "请求已完成、取消或过期，请刷新查看",
+  operation_binding_invalid: "原消息绑定已失效，请重新发起请求",
+  reference_unresolved_or_ambiguous:
+    "资料不可见、不存在或重名，请使用可见编码或ID",
+  invalid_operation_values: "请求参数格式不正确",
+  too_many_pending_operations: "待处理请求已达20条，请先处理或取消",
   binding_conflict: "此实例已存在账号绑定，请检查已有绑定",
   invalid_credentials: "当前密码不正确",
   login_temporarily_unavailable: "账号暂时锁定，请稍后重试",
@@ -929,6 +938,7 @@ function Workspace() {
     { key: "dashboard", label: "工作概览", icon: LayoutDashboard },
     { key: "procurement", label: "采购订单", icon: Box },
     { key: "stock", label: "库存与入库", icon: Box },
+    { key: "operations", label: "操作工作台", icon: ShieldCheck },
     { key: "messaging", label: "消息接入", icon: Users },
     { key: "configuration", label: "采购业务规则", icon: ShieldCheck },
     { key: "categories", label: "商品分类", icon: Box },
@@ -992,7 +1002,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.3 · 开发版</small>
+            统一授权，安心协作<small>v1.0.4 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -1032,6 +1042,8 @@ function Workspace() {
             <ProcurementView api={api} />
           ) : page === "stock" ? (
             <StockView api={api} />
+          ) : page === "operations" ? (
+            <OperationsView api={api} />
           ) : page === "messaging" ? (
             <MessagingView api={api} />
           ) : page === "configuration" ? (
