@@ -86,3 +86,14 @@
 - GET `/api/v1/message_deliveries?limit=50&after=&state=`：state为pending/awaiting_ack/delivered/failed/suppressed/expired；仅返回当前允许的元数据，不能获取recipe、收件人、原文或业务结果。
 
 分别要求新资源onebot_connections/message_deliveries的read，并且关联实例ID当前可读；数据范围在分页前过滤，按状态/ID筛选需相应字段可读。没有通用详情或写入/强制补发接口。日期在投影后输出UTC ISO8601；过期按受限维护推进。已有角色需显式授权，新bootstrap为当前资源建立策略。
+
+
+## v1.0.6 客户与销售
+
+- GET/POST `/api/v1/customers`，GET/PATCH `/api/v1/customers/{id}`：通用受限目录，创建体`{data:{code,name,owner_id,department_id?,contact?,phone?,active?}}`，更新体`{version,data:{...}}`。复用数据范围、字段写入/投影、版本校验及审计；无物理删除。
+- GET `/api/v1/sales_orders?limit=50&after=&status=`：limit≤100，status仅draft/submitted/approved/cancelled；状态筛选须status可读、游标须id可读，SQL在分页前过滤客户和所有商品引用。
+- POST `/api/v1/sales_orders`：`{customer_id,currency,note?,lines:[{product_id,quantity,unit_price}]}`，最多100行，数量/价格只接受十进制字符串或整数。后端生成单号/归属/状态/总额，不接受额外身份字段。
+- GET/PATCH `/api/v1/sales_orders/{id}`：受限详情/完整草稿编辑，PATCH另需version。金额total/unit_price/line_amount按最严格字段策略共同隐藏或脱敏。
+- POST `/api/v1/sales_orders/{id}/submit|approve|cancel`：`{version}`，当前权限与旧/新状态均校验；销售创建人不得自批。提交/审批要求币种和no_tax配置；未配置409。当前无销售出库、删除、导出或AI/OneBot销售工具接口。
+
+写入与outbox/审计同事务，写入成功但缺少读取权限时只返回`{saved:true}`；所有路由使用相同会话/CSRF/Origin/Gate边界。升级需显式给旧角色授权customers/sales_orders。

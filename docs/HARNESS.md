@@ -19,3 +19,6 @@ v1.0.4 OperationsView: an exact-file isolated task timed out at240 seconds and n
 
 
 v1.0.5回执样例任务未得到可审查报告或候选文件，未采用任何产物，不计为成功委派；没有放宽隔离。最终回执、连接、并发和权限测试由Codex实现并真实运行。
+
+
+v1.0.6销售金额样例：精确授权tests/fixtures/sales_amount_cases.json，隔离dry-run通过。headless返回needs_codex_review，但review实际changed为空，指定JSON检查退出69，tests_passed=false；未应用候选、未调整报告或隔离。Codex接管八例样本与真实金额校验，不计为成功委派。

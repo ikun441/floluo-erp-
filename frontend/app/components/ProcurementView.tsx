@@ -737,8 +737,10 @@ export function BusinessConfiguration({ api }: { api: Api }) {
       <div className="section-heading">
         <div>
           <span className="eyebrow">BUSINESS / CONFIGURATION</span>
-          <h1>采购业务规则</h1>
-          <p className="muted">明确支持的币种和税模式后，才能提交采购审批。</p>
+          <h1>业务规则配置</h1>
+          <p className="muted">
+            配置采购与销售共用的币种和税模式，配置完成后才能提交审批。
+          </p>
         </div>
       </div>
       <Failure error={query.error || error} />
@@ -770,7 +772,7 @@ export function BusinessConfiguration({ api }: { api: Api }) {
                 defaultValue={String(values.tax_mode)}
               >
                 <option value="unconfigured">未配置（阻止提交）</option>
-                <option value="no_tax">无税模式（采购不计算税额）</option>
+                <option value="no_tax">无税模式（采购与销售不计算税额）</option>
               </select>
             </label>
             <label className="business-check">
@@ -779,7 +781,7 @@ export function BusinessConfiguration({ api }: { api: Api }) {
                 name="separate"
                 defaultChecked={Boolean(values.require_separate_approver)}
               />
-              审批人必须与采购单创建人不同
+              采购审批人必须与采购单创建人不同（销售始终独立审批）
             </label>
             <button className="primary" disabled={busy}>
               {busy ? "保存中…" : "保存业务规则"}

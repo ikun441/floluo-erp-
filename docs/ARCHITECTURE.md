@@ -3,7 +3,7 @@
 ## 部署与模块边界
 
 Linux / Nginx → Next.js Web、FastAPI REST / WebSocket → 统一应用服务 → 权限决策 + 业务领域 → SQLAlchemy / PostgreSQL。
-Celery + Redis 用于通知、AI 超时任务、报表任务；事务 outbox 发布已提交事件，业务正确性不依赖队列在线。
+Celery + Redis 规划用于通知、AI 超时任务、报表任务，当前核心启动无此必需依赖；事务 outbox 发布已提交事件，业务正确性不依赖队列在线。
 Redis 不作为库存或授权真相来源。AI 与消息协议可独立关闭，核心 Web 不依赖外网。
 
 模块依赖：identity → authorization → catalog → procurement → inventory；sales 依赖 catalog/inventory；workflow 通过应用命令触发并重新授权；audit 为基础设施横切能力。adapters(onebot/web/ai_tools) 仅调用 application，不反向依赖 adapter。
@@ -40,3 +40,8 @@ OneBot transport → message_gateway（Gate、事务、收件箱和审计）→ 
 ## v1.0.4 预览与执行分离
 
 Web/OneBot → message_operations应用服务 → procurement.prepare_draft纯计划/统一权限 → Web密码复核后procurement.draft。预览与执行共用校验逻辑，参数及引用版本摘要将用户所见与提交内容绑定；版本或绑定变化后重新预览。MessageOperation持久化收集/确认/取消/过期/完成状态，消息适配器不直接写业务数据。新增操作工作台连接真实API；版本日志迁至docx/version.md。
+
+
+## v1.0.6 客户与销售基础
+
+SalesView → sales_api → sales → order_support + Engine → sales_models/PostgreSQL。客户资料使用同一受限目录服务，权限字段/动作通过注册表驱动权限中心。order_support仅提取原有受限引用、配置、版本、线格式及outbox工具；procurement保留导入兼容，不改变其调用契约。销售和采购共享币种/税配置，销售始终独立审批；销售订单只进入草稿/提交/批准/取消状态，本切片不变动库存。未来出库复用库存领域事务，不直接改余额。详见SALES.md。

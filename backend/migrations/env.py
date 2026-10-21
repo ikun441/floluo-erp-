@@ -1,5 +1,5 @@
 from alembic import context
-from erp import business_models, message_models  # noqa: F401
+from erp import business_models, message_models, sales_models  # noqa: F401
 from erp.config import Settings
 from erp.models import Base
 from sqlalchemy import engine_from_config, pool

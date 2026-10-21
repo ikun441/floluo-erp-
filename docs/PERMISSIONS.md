@@ -48,3 +48,10 @@ preview字段控制参数写入与完整预览展示，state字段控制显式�
 onebot_connections与message_deliveries仅有read；后者支持own/records/all，前者支持records/all。关联onebot_instances.id必须在当前可读范围，筛选state和游标id也需可读。监控不注册recipe、收件人、连接UUID/回执token或原文字段，不能经通用CRUD读写。旧角色必须显式增加新资源权限；前端隐藏不替代后端约束。
 
 投递器是内部受限执行者，不能接受客户端角色/SQL/自由工具。业务回复每次按保存主体、平台收件人和绑定版本重建Engine，检查bindings.use后调用相同业务服务。只重建查询或已有请求视图，不重放创建/审批/入库。身份失效或请求授权不足抑制并清除recipe，读取权限变化按当前范围/字段重新过滤。
+
+
+## v1.0.6 销售资源
+
+customers复用目录read/create/update；sales_orders注册read/create/update/submit/approve/cancel，支持own/department/departments/records/all。只在新bootstrap显式生成策略，已发布快照不改动，升级需管理员在权限中心显式授予。sales_orders字段为订单ID/版本/单号/customer_id/owner_id/department_id/currency/total/status/note/approved_by/lines/unit_price/line_amount；后三者为虚拟字段，禁止SQL条件。
+
+销售列表/详情在SQL中过滤当前客户和所有商品的可读ID，状态/游标探测须相应字段可读；金额三字段取最严格投影，不能从明细反推隐藏总额。编辑旧/新候选与实际提交字段均校验；状态迁移旧/新状态授权，requires_approval继续拒绝，独立审批不替代业务权限。创建归属取服务端当前身份。审批不产生库存权限或变动。

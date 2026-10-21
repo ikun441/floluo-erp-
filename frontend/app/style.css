@@ -1109,3 +1109,64 @@ pre {
 .connection-monitor .pagination {
   margin-top: 12px;
 }
+
+.sales-fields {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.sales-title > div {
+  min-width: 0;
+}
+.sales-title > button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sales-list-heading {
+  flex-wrap: wrap;
+}
+.sales-list-heading h3 {
+  white-space: nowrap;
+}
+.sales-list-heading .actions-row {
+  padding: 0;
+  gap: 12px;
+  align-items: center;
+}
+.sales-list-heading label {
+  white-space: nowrap;
+}
+.sales-detail-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  padding: 0 0 16px;
+  margin-bottom: 16px;
+}
+.sales-detail-heading h2 {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 20px;
+  line-height: 1.5;
+}
+.sales-detail-heading button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+@media (max-width: 600px) {
+  .sales-detail-heading {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+  .sales-detail-heading h2 {
+    font-size: 18px;
+  }
+  .sales-detail-heading button {
+    justify-self: start;
+  }
+}

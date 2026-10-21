@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import SalesView from "./components/SalesView";
 import OperationsView from "./components/OperationsView";
 import MessagingView from "./components/MessagingView";
 import LoginView from "./components/LoginView";
@@ -38,6 +39,7 @@ type Resource =
   | "positions"
   | "roles"
   | "categories"
+  | "customers"
   | "suppliers"
   | "warehouses";
 type ResourceSpec = { fields: string[]; actions: string[]; scopes: string[] };
@@ -56,6 +58,7 @@ type Rule = {
 const labels: Record<Resource, string> = {
   categories: "商品分类",
   suppliers: "供应商",
+  customers: "客户资料",
   warehouses: "仓库",
   products: "商品资料",
   users: "用户管理",
@@ -75,6 +78,15 @@ const fields: Record<Resource, string[]> = {
   ],
   categories: ["name", "parent_id"],
   suppliers: [
+    "code",
+    "name",
+    "contact",
+    "phone",
+    "owner_id",
+    "department_id",
+    "active",
+  ],
+  customers: [
     "code",
     "name",
     "contact",
@@ -119,7 +131,7 @@ const names: Record<string, string> = {
 };
 const errorMessages: Record<string, string> = {
   business_rules_unconfigured: "请先配置支持币种与税模式",
-  self_approval_denied: "采购单创建人不能审批自己的订单",
+  self_approval_denied: "订单创建人不能审批自己的订单",
   version_conflict: "记录已更新，请刷新后重试",
   invalid_or_excess_receipt_quantity:
     "收货数量超过剩余数量，或明细不属于当前订单",
@@ -828,7 +840,7 @@ function Dashboard() {
         </div>
         <span className="version-pill">
           <span className="dot" />
-          基础设施开发中
+          业务模块开发中
         </span>
       </div>
       <div className="cards">
@@ -864,7 +876,7 @@ function Dashboard() {
           <p>
             用户、角色和数据范围，共用一个授权边界。
             <br />
-            Web 与后续消息入口保持一致。
+            Web 与消息入口保持一致。
           </p>
         </div>
         <div className="welcome-symbol">
@@ -878,6 +890,9 @@ function Dashboard() {
             "真实用户认证与会话撤销",
             "组织、角色与商品基础资料",
             "版本化策略与权限模拟",
+            "采购审批、分批入库与库存流水",
+            "客户资料、销售订单与独立审批",
+            "OneBot绑定、离线助手与回复监控",
           ].map((s) => (
             <p className="checkline" key={s}>
               <Check size={17} />
@@ -888,10 +903,10 @@ function Dashboard() {
         <section className="panel padded">
           <h3>接下来</h3>
           <p className="muted">
-            采购与库存流水 → OneBot → 可选 AI → 审批 → 销售与报表。
+            销售出库 → 库存分析与报表 → 可选 AI → 通用审批。
           </p>
           <div className="notice compact">
-            采购与入库已接入真实业务；消息支持可信连接、账号绑定与受控查询。AI、销售与报表按后续阶段扩展。
+            销售订单现已接入真实业务；本阶段审批完成后不预留或扣减库存，出库将在后续切片交付。
           </div>
         </section>
       </div>
@@ -910,6 +925,9 @@ function Workspace() {
     [dark, setDark] = useState(false),
     [error, setError] = useState<unknown>();
   function resetSession() {
+    setPage("dashboard");
+    setSearch("");
+    setError(undefined);
     qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
     void qc.invalidateQueries({ queryKey: ["me"] });
   }
@@ -937,10 +955,12 @@ function Workspace() {
   const nav = [
     { key: "dashboard", label: "工作概览", icon: LayoutDashboard },
     { key: "procurement", label: "采购订单", icon: Box },
+    { key: "sales", label: "销售订单", icon: Box },
+    { key: "customers", label: "客户资料", icon: Building2 },
     { key: "stock", label: "库存与入库", icon: Box },
     { key: "operations", label: "操作工作台", icon: ShieldCheck },
     { key: "messaging", label: "消息接入", icon: Users },
-    { key: "configuration", label: "采购业务规则", icon: ShieldCheck },
+    { key: "configuration", label: "业务规则配置", icon: ShieldCheck },
     { key: "categories", label: "商品分类", icon: Box },
     { key: "suppliers", label: "供应商", icon: Building2 },
     { key: "warehouses", label: "仓库", icon: Building2 },
@@ -1002,7 +1022,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.5 · 开发版</small>
+            统一授权，安心协作<small>v1.0.6 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -1040,6 +1060,8 @@ function Workspace() {
             <Dashboard />
           ) : page === "procurement" ? (
             <ProcurementView api={api} />
+          ) : page === "sales" ? (
+            <SalesView api={api} />
           ) : page === "stock" ? (
             <StockView api={api} />
           ) : page === "operations" ? (

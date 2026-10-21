@@ -25,6 +25,7 @@ from .message_models import (
     OneBotInstance,
 )
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
+from .sales_models import Customer, SalesOrder
 from .schemas import Rule
 
 
@@ -218,6 +219,22 @@ RESOURCES["warehouses"] = Resource(
     frozenset({"read", "create", "update", "receive"}),
     "owner_id",
     "department_id",
+)
+
+
+RESOURCES["customers"] = Resource(
+    Customer,
+    RESOURCES["suppliers"].fields,
+    owner_column="owner_id",
+    department_column="department_id",
+)
+RESOURCES["sales_orders"] = Resource(
+    SalesOrder,
+    (RESOURCES["purchase_orders"].fields - {"supplier_id"}) | {"customer_id"},
+    frozenset({"read", "create", "update", "submit", "approve", "cancel"}),
+    "owner_id",
+    "department_id",
+    frozenset({"lines", "unit_price", "line_amount"}),
 )
 
 

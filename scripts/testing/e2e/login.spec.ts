@@ -243,7 +243,7 @@ test("two real users approve and receive a purchase into inventory", async ({
     password: approverPassword,
     role_ids: admin.role_ids,
   });
-  await page.getByRole("button", { name: "采购业务规则", exact: true }).click();
+  await page.getByRole("button", { name: "业务规则配置", exact: true }).click();
   await page
     .getByRole("textbox", { name: "支持币种（逗号分隔）", exact: true })
     .fill("CNY");
@@ -279,10 +279,8 @@ test("two real users approve and receive a purchase into inventory", async ({
   await page.getByRole("button", { name: "提交审批", exact: true }).click();
   await page.getByRole("button", { name: "批准采购单", exact: true }).click();
   await expect(
-    page
-      .getByRole("alert")
-      .filter({ hasText: "采购单创建人不能审批自己的订单" }),
-  ).toContainText("采购单创建人不能审批自己的订单");
+    page.getByRole("alert").filter({ hasText: "订单创建人不能审批自己的订单" }),
+  ).toContainText("订单创建人不能审批自己的订单");
   const context = await browser.newContext({
     baseURL: "http://127.0.0.1:3000",
   });
@@ -719,4 +717,168 @@ print("ok")
   await monitor.screenshot({
     path: path.join(root, "output/playwright/monitor-mobile.png"),
   });
+});
+
+test("customer master and sales draft edit submit independent approve with responsive pages", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf =
+    (await page.context().cookies()).find((c) => c.name === "erp_csrf")
+      ?.value ?? "";
+  const headers = { "X-CSRF-Token": csrf };
+  const me = await (await page.request.get("/api/v1/auth/me")).json();
+  const user = await (await page.request.get("/api/v1/users/" + me.id)).json();
+  const suffix = Date.now().toString();
+  async function create(resource: string, data: Record<string, unknown>) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers,
+      data: { data },
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  await page.getByRole("button", { name: "客户资料", exact: true }).click();
+  await page.getByRole("button", { name: "新建资料", exact: true }).click();
+  let dialog = page.getByRole("dialog");
+  await dialog.getByLabel("编码", { exact: true }).fill("customer-" + suffix);
+  await dialog.getByLabel("名称", { exact: true }).fill("销售客户 " + suffix);
+  await dialog.getByLabel("联系人", { exact: true }).fill("测试联系人");
+  await dialog.getByLabel("联系电话", { exact: true }).fill("test-contact");
+  const created = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/customers") && r.request().method() === "POST",
+  );
+  await dialog.getByRole("button", { name: "保存资料", exact: true }).click();
+  const customerResponse = await created;
+  expect(customerResponse.status()).toBe(200);
+  const customer = await customerResponse.json();
+  await expect(dialog).not.toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: customer.name, exact: true }),
+  ).toBeVisible();
+  const product = await create("products", {
+    sku: "sales-" + suffix,
+    name: "销售商品 " + suffix,
+    unit: "piece",
+    owner_id: me.id,
+  });
+  const approverName = "sales_approver_" + suffix,
+    approverPassword = "Sales-approver-" + "x".repeat(20);
+  await create("users", {
+    username: approverName,
+    password: approverPassword,
+    role_ids: user.role_ids,
+  });
+  const config = await (
+    await page.request.get("/api/v1/system_configuration")
+  ).json();
+  const configured = await page.request.patch("/api/v1/system_configuration", {
+    headers,
+    data: {
+      version: config.version,
+      values: { supported_currencies: ["CNY"], tax_mode: "no_tax" },
+    },
+  });
+  expect(configured.status()).toBe(200);
+  await page.getByRole("button", { name: "销售订单", exact: true }).click();
+  await page.getByRole("button", { name: "新建销售单", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("客户", { exact: true }).selectOption(customer.id);
+  await dialog.getByLabel("币种", { exact: true }).fill("CNY");
+  await dialog.getByLabel("商品", { exact: true }).selectOption(product.id);
+  await dialog.getByLabel("数量", { exact: true }).fill("3");
+  await dialog.getByLabel("单价", { exact: true }).fill("20.00");
+  const creating = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/sales_orders") &&
+      r.request().method() === "POST",
+  );
+  await dialog
+    .getByRole("button", { name: "保存销售草稿", exact: true })
+    .click();
+  const response = await creating;
+  expect(response.status()).toBe(200);
+  const order = await response.json();
+  expect(order.total).toBe("60.00");
+  await expect(dialog).not.toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("cell", { name: order.number, exact: true }),
+    })
+    .getByRole("button", { name: "查看销售单", exact: true })
+    .click();
+  await page.getByRole("button", { name: "编辑销售草稿", exact: true }).click();
+  dialog = page.getByRole("dialog");
+  await dialog.getByLabel("数量", { exact: true }).fill("2.5");
+  await dialog.getByLabel("单价", { exact: true }).fill("4.00");
+  const editing = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/v1/sales_orders/" + order.id) &&
+      r.request().method() === "PATCH",
+  );
+  await dialog
+    .getByRole("button", { name: "保存销售草稿", exact: true })
+    .click();
+  expect((await editing).status()).toBe(200);
+  await expect(dialog).not.toBeVisible();
+  const submitting = page.waitForResponse((r) =>
+    r.url().endsWith("/" + order.id + "/submit"),
+  );
+  await page.getByRole("button", { name: "提交销售审批", exact: true }).click();
+  expect((await submitting).status()).toBe(200);
+  await page.getByRole("button", { name: "批准销售单", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
+    "订单创建人不能审批自己的订单",
+  );
+  await page.getByRole("button", { name: "退出登录", exact: true }).click();
+  await login(page, approverName, approverPassword);
+  await page.getByRole("button", { name: "销售订单", exact: true }).click();
+  await page.getByLabel("销售状态", { exact: true }).selectOption("submitted");
+  await page
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("cell", { name: order.number, exact: true }),
+    })
+    .getByRole("button", { name: "查看销售单", exact: true })
+    .click();
+  const approval = page.waitForResponse((r) =>
+    r.url().endsWith("/" + order.id + "/approve"),
+  );
+  await page.getByRole("button", { name: "批准销售单", exact: true }).click();
+  expect((await approval).status()).toBe(200);
+  await page.getByLabel("销售状态", { exact: true }).selectOption("approved");
+  await expect(
+    page.getByRole("cell", { name: "已批准", exact: true }).first(),
+  ).toBeVisible();
+  const final = await (
+    await page.request.get("/api/v1/sales_orders/" + order.id)
+  ).json();
+  expect(final.total).toBe("10.00");
+  expect(final.status).toBe("approved");
+  expect(final.version).toBe(4);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/sales-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("heading", { name: "销售订单", exact: true }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/sales-mobile.png"),
+    fullPage: true,
+  });
+  const cancelling = page.waitForResponse((r) =>
+    r.url().endsWith("/" + order.id + "/cancel"),
+  );
+  await page.getByRole("button", { name: "取消销售单", exact: true }).click();
+  expect((await cancelling).status()).toBe(200);
 });

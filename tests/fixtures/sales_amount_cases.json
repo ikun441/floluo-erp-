@@ -1,0 +1,50 @@
+[
+  {
+    "name": "basic",
+    "quantity": "3",
+    "unit_price": "10",
+    "expected_amount": "30.00"
+  },
+  {
+    "name": "fractional",
+    "quantity": "0.5",
+    "unit_price": "0.20",
+    "expected_amount": "0.10"
+  },
+  {
+    "name": "subcent",
+    "quantity": "0.0001",
+    "unit_price": "0.01",
+    "expected_amount": null
+  },
+  {
+    "name": "free",
+    "quantity": "2",
+    "unit_price": "0",
+    "expected_amount": "0.00"
+  },
+  {
+    "name": "maximum",
+    "quantity": "1",
+    "unit_price": "9999999999999999.99",
+    "expected_amount": "9999999999999999.99"
+  },
+  {
+    "name": "overflow",
+    "quantity": "2",
+    "unit_price": "9999999999999999.99",
+    "expected_amount": null
+  },
+  {
+    "name": "four_places",
+    "quantity": "1.2500",
+    "unit_price": "8.00",
+    "expected_amount": "10.00"
+  },
+  {
+    "name": "leading_zero",
+    "quantity": "0002.00",
+    "unit_price": "03.50",
+    "expected_amount": "7.00"
+  }
+]

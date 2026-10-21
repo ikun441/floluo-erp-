@@ -1,6 +1,6 @@
 # 数据模型与核心关系
 
-本文件先于业务实现建立。Phase 1 迁移只创建 identity、authorization、audit 与商品基础切片；Phase 2已迁移采购/库存基础表，并已开放采购单、审批、入库和库存的真实接口。消息和工作流表仍为后续设计。
+本文件先于业务实现建立。Phase 1 迁移只创建 identity、authorization、audit 与商品基础切片；Phase 2已迁移采购/库存基础表，并已开放采购单、审批、入库和库存的真实接口。消息身份、收件箱、操作会话、回复/连接运行态及客户/销售表已落地；通用工作流仍为后续设计。
 
 | 关系 | 约束与用途 |
 | --- | --- |
@@ -51,3 +51,8 @@ Web发起时binding_id/binding_version为空，消息发起时保存有效绑定
 ## v1.0.5 回复投递与连接运行态（已实现）
 
 onebot_instance 1—0..1 onebot_connection；message_inbox 1—0..1 message_delivery（event_key唯一外键）。message_delivery同时关联实例、可空用户和版本化绑定快照。回复只持久化受限recipe，不持久化结果正文，终态清除recipe。连接UUID作为跨进程租约栅栏，单实例仅一个未过期拥有者。新表、状态约束、外键与队列索引通过新迁移添加，旧表与迁移不改动。完整字段、状态、权限和失败语义见[DELIVERY.md](DELIVERY.md)。
+
+
+## v1.0.6 客户与销售订单
+
+新增be0f9a8b7c6d（继承ad9e8f7a6b5c）：customer唯一编码/归属外键，sales_order客户/归属/审批人外键、唯一SO单号、非负NUMERIC总额及状态/审批人配对约束；sales_line订单/商品外键、订单内行号唯一、正数数量和非负金额。均包含UTC时间/version及FK索引。既有表、迁移、库存来源约束和策略快照不改动，不造业务资料；存在客户或销售历史时拒绝破坏性降级。完整ER关系与安全默认见SALES.md。

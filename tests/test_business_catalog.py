@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 def rule(resource, **overrides):
     fields = {"id", "version", "name", "code", "owner_id", "department_id", "active"}
-    if resource == "suppliers":
+    if resource in {"suppliers", "customers"}:
         fields |= {"contact", "phone"}
     return {
         "id": "own-" + resource,
@@ -31,7 +31,7 @@ def create(client, resource, data):
     return response.json()
 
 
-@pytest.mark.parametrize("resource", ["suppliers", "warehouses"])
+@pytest.mark.parametrize("resource", ["suppliers", "warehouses", "customers"])
 def test_new_catalog_scope_mask_write_and_paging(env, resource):
     admin, alice, bob = env["client"](), env["client"]("alice"), env["client"]("bob")
     for client, owner in ((admin, "alice"), (admin, "bob")):
@@ -46,7 +46,7 @@ def test_new_catalog_scope_mask_write_and_paging(env, resource):
             },
         )
     policy = rule(resource)
-    if resource == "suppliers":
+    if resource in {"suppliers", "customers"}:
         policy["fields"]["phone"] = "masked"
         policy["fields"]["contact"] = "hidden"
     assert grant(admin, [policy]).status_code == 200
@@ -73,7 +73,7 @@ def test_new_catalog_scope_mask_write_and_paging(env, resource):
         == 403
     )
     assert alice.get(f"/api/v1/{resource}?limit=1&after={own[0]['id']}").json()["items"] == []
-    if resource == "suppliers":
+    if resource in {"suppliers", "customers"}:
         assert own[0]["phone"] == "***" and "contact" not in own[0]
         assert (
             post(

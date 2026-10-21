@@ -1,4 +1,4 @@
-# 弗洛洛 ERP · v1.0.5 开发版
+# 弗洛洛 ERP · v1.0.6 开发版
 
 <img src="frontend/public/brand/floluo-logo.png" alt="弗洛洛 ERP Logo" width="144" height="144">
 
@@ -12,7 +12,9 @@ v1.0.5新增：操作工作台与已绑定私聊支持离线中文规则，识�
 
 消息接入页新增真实连接与回复监控。回复与收件箱同事务入队，断线重连后按当前权限重新生成，最多尝试3次并跟踪API回执；不会再次执行采购命令。旧角色须显式授权监控资源，详见 [回复投递](docs/DELIVERY.md)。
 
-首次使用采购前，需由已授权管理员在Web明确配置支持币种和税模式；默认未配置时拒绝提交。审批人默认必须与创建人不同。
+v1.0.6新增客户资料与销售订单页面：真实建单、草稿编辑、状态筛选、提交、独立审批与取消；金额和关联资料沿用统一权限。销售出库、库存预留和扣减将在后续切片实现，当前销售审批不会变动库存。详见 [销售设计与边界](docs/SALES.md)。
+
+首次使用采购/销售前，需由已授权管理员在Web「业务规则配置」明确支持币种和税模式；默认未配置时拒绝提交。采购审批人默认须与创建人不同，销售始终要求独立审批。已有安装需显式授权新customers/sales_orders资源，不自动扩张旧角色。
 
 ## Docker Compose
 
@@ -90,5 +92,5 @@ npm run e2e
 版本更新日志统一维护在 [docx/version.md](docx/version.md)。
 
 - [架构](docs/ARCHITECTURE.md) · [数据库](docs/DATABASE.md) · [权限模型](docs/PERMISSIONS.md)
-- [操作工作台](docs/OPERATIONS.md) · [采购设计与当前范围](docs/PROCUREMENT.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
+- [操作工作台](docs/OPERATIONS.md) · [采购设计与当前范围](docs/PROCUREMENT.md) · [客户与销售](docs/SALES.md) · [API](docs/API.md) · [OneBot](docs/ONEBOT.md) · [AI](docs/AI.md) · [安全](docs/SECURITY.md)
 - [登录设计](docs/LOGIN_DESIGN.md) · [Harness](docs/HARNESS.md) · [实施与验证记录](docs/IMPLEMENTATION.md)

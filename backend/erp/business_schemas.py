@@ -104,3 +104,14 @@ class ConfigurationValues(Strict):
 class ConfigurationUpdate(Strict):
     version: int = Field(ge=1)
     values: ConfigurationValues
+
+
+class SalesOrderInput(Strict):
+    customer_id: str
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    note: str = Field(default="", max_length=2000)
+    lines: list[LineInput] = Field(min_length=1, max_length=100)
+
+
+class SalesOrderUpdate(SalesOrderInput):
+    version: int = Field(ge=1)

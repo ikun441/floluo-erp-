@@ -15,6 +15,7 @@ INPUTS = {
     "products": ClassifiedProductInput,
     "categories": CategoryInput,
     "suppliers": SupplierInput,
+    "customers": SupplierInput,
     "warehouses": WarehouseInput,
     "users": UserInput,
     "departments": DepartmentInput,
