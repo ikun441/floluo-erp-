@@ -261,6 +261,19 @@ RESOURCES["sales_shipments"] = Resource(
 )
 
 
+# New capabilities are explicit grants; publishing an old revision never expands actions.
+for _name in ("inventory_balances", "stock_movements", "purchase_orders", "sales_orders"):
+    _spec = RESOURCES[_name]
+    RESOURCES[_name] = Resource(
+        _spec.model,
+        _spec.fields,
+        _spec.actions | {"report", "export"},
+        _spec.owner_column,
+        _spec.department_column,
+        _spec.virtual_fields,
+    )
+
+
 RESOURCES.update(
     {
         "onebot_instances": Resource(
@@ -517,14 +530,29 @@ class Engine:
             not_(or_(*pending)) if pending else true(),
         )
 
-    def readable_scope(self, resource, fields):
+    def field_scope(self, resource, fields, action="read"):
+        """SQL equivalent of an immediately executable decision with readable fields.
+
+        All matching allows contribute the strictest mode, including pending grants.
+        Used before grouping/filtering so a masked value cannot become an oracle.
+        """
+        if not set(fields) <= RESOURCES[resource].fields:
+            raise ValueError("unknown field")
         restrictive = [
             self.predicate(rule)
-            for rule in self.applicable(resource, "read")
+            for rule in self.applicable(resource, action)
             if rule.effect == "allow"
-            and any(rule.fields.get(field, "hidden") not in {"read", "write"} for field in fields)
+            and (
+                rule.requires_approval
+                or any(
+                    rule.fields.get(field, "hidden") not in {"read", "write"} for field in fields
+                )
+            )
         ]
-        return self.scope(resource, "read") & (not_(or_(*restrictive)) if restrictive else true())
+        return self.scope(resource, action) & (not_(or_(*restrictive)) if restrictive else true())
+
+    def readable_scope(self, resource, fields):
+        return self.field_scope(resource, fields)
 
     def _matches_data(self, rule, data):
         # Evaluate the same SQL predicate against bound candidate data, avoiding Python/SQL drift.

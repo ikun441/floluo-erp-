@@ -23,6 +23,7 @@ from .models import Gate, PolicyRevision, SessionToken, Throttle, User, now
 from .onebot.transport import register as register_onebot
 from .permissions import RESOURCES, Engine, conflicts, resource_catalog, subject, validate_rules
 from .procurement_api import register as register_procurement
+from .reports_api import register as register_reports
 from .sales_api import register as register_sales
 from .schemas import CreateEntity, Login, PatchEntity, Publish, Simulate
 from .services import (
@@ -362,6 +363,7 @@ def create_app(settings=None):
 
     register_procurement(app, database, authorized_engine)
     register_sales(app, database, authorized_engine)
+    register_reports(app, database, authorized_engine)
     register_messaging(app, database, authorized_engine)
     register_message_operations(app, database, authorized_engine)
     register_intents(app, database, authorized_engine)

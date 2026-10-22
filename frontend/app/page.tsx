@@ -1,5 +1,6 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import ReportsView from "./components/ReportsView";
 import SalesView from "./components/SalesView";
 import OperationsView from "./components/OperationsView";
 import MessagingView from "./components/MessagingView";
@@ -130,6 +131,11 @@ const names: Record<string, string> = {
   parent_id: "上级 ID",
 };
 const errorMessages: Record<string, string> = {
+  report_permission_denied: "当前账号缺少报表读取、统计或导出权限",
+  report_source_limit: "合格记录超过 10000 条，请缩小筛选范围",
+  report_group_limit: "汇总超过 200 组，请缩小筛选范围",
+  report_query_timeout: "报表计算超时，请缩小筛选范围后重试",
+  invalid_report_filter: "此报表不支持当前筛选条件",
   business_rules_unconfigured: "请先配置支持币种与税模式",
   self_approval_denied: "订单创建人不能审批自己的订单",
   version_conflict: "记录已更新，请刷新后重试",
@@ -966,6 +972,7 @@ function Workspace() {
     { key: "sales", label: "销售订单", icon: Box },
     { key: "customers", label: "客户资料", icon: Building2 },
     { key: "stock", label: "库存与出入库", icon: Box },
+    { key: "reports", label: "分析与报表", icon: LayoutDashboard },
     { key: "operations", label: "操作工作台", icon: ShieldCheck },
     { key: "messaging", label: "消息接入", icon: Users },
     { key: "configuration", label: "业务规则配置", icon: ShieldCheck },
@@ -1072,6 +1079,8 @@ function Workspace() {
             <SalesView api={api} />
           ) : page === "stock" ? (
             <StockView api={api} />
+          ) : page === "reports" ? (
+            <ReportsView api={api} />
           ) : page === "operations" ? (
             <OperationsView api={api} />
           ) : page === "messaging" ? (

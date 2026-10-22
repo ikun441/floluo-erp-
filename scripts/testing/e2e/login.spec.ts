@@ -1187,3 +1187,197 @@ test("sales fulfillment retries a committed request and closes the real inventor
     await reviewer.close();
   }
 });
+
+test("real reports, filters, current CSV authorization and mobile layout", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf =
+    (await page.context().cookies()).find(
+      (cookie) => cookie.name === "erp_csrf",
+    )?.value ?? "";
+  const headers = { "X-CSRF-Token": csrf };
+  const me = await (await page.request.get("/api/v1/auth/me")).json();
+  const suffix = Date.now().toString();
+  async function command(resource: string, data: unknown, key?: string) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers: { ...headers, ...(key ? { "Idempotency-Key": key } : {}) },
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  const product = await command("products", {
+    data: {
+      sku: "reports-" + suffix,
+      name: "报表验证商品 " + suffix,
+      unit: "piece",
+      owner_id: me.id,
+    },
+  });
+  const warehouse = await command("warehouses", {
+    data: {
+      code: "reports-" + suffix,
+      name: "报表验证仓库 " + suffix,
+      owner_id: me.id,
+    },
+  });
+  const supplier = await command("suppliers", {
+    data: {
+      code: "reports-" + suffix,
+      name: "报表验证供应商 " + suffix,
+      owner_id: me.id,
+    },
+  });
+  const config = await (
+    await page.request.get("/api/v1/system_configuration")
+  ).json();
+  expect(
+    (
+      await page.request.patch("/api/v1/system_configuration", {
+        headers,
+        data: {
+          version: config.version,
+          values: {
+            supported_currencies: ["CNY"],
+            tax_mode: "no_tax",
+            require_separate_approver: false,
+          },
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  let order = await command("purchase_orders", {
+    supplier_id: supplier.id,
+    currency: "CNY",
+    note: "",
+    lines: [{ product_id: product.id, quantity: "7", unit_price: "2.00" }],
+  });
+  order = await command("purchase_orders/" + order.id + "/submit", {
+    version: order.version,
+  });
+  order = await command("purchase_orders/" + order.id + "/approve", {
+    version: order.version,
+  });
+  await command(
+    "purchase_orders/" + order.id + "/receive",
+    {
+      version: order.version,
+      warehouse_id: warehouse.id,
+      lines: [{ line_id: order.lines[0].id, quantity: "7" }],
+    },
+    "reports-" + suffix,
+  );
+  await page.getByRole("button", { name: "分析与报表", exact: true }).click();
+  await page.getByLabel("仓库 ID", { exact: true }).fill(warehouse.id);
+  await page.getByRole("button", { name: "应用筛选", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: product.name, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "7.0000", exact: true }),
+  ).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "导出 CSV", exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("inventory.csv");
+  const { readFile } = await import("node:fs/promises");
+  const content = await readFile((await download.path())!, "utf8");
+  expect(content).toContain(product.name);
+  expect(content).toContain("7.0000");
+  expect(content.trim().split("\n")).toHaveLength(2);
+  await expect(page.getByRole("status")).toContainText("CSV 已下载");
+  await page.screenshot({
+    path: path.join(root, "output/playwright/reports-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/reports-mobile.png"),
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "出入库汇总", exact: true }).click();
+  await page.getByLabel("商品 ID", { exact: true }).fill(product.id);
+  await page.getByRole("button", { name: "应用筛选", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "采购入库（增加）", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "采购汇总", exact: true }).click();
+  await page.getByLabel("订单指标", { exact: true }).selectOption("amount");
+  await page.getByRole("button", { name: "应用筛选", exact: true }).click();
+  await expect(
+    page.getByRole("columnheader", { name: "订单金额", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "订单数量分布", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "销售汇总", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "报表明细", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "当前库存", exact: true }).click();
+  await page.getByLabel("仓库 ID", { exact: true }).fill(warehouse.id);
+  await page.getByRole("button", { name: "应用筛选", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: product.name, exact: true }),
+  ).toBeVisible();
+  const revision = await (await page.request.get("/api/v1/policies")).json();
+  const deny = {
+    id: "browser-report-deny-" + suffix,
+    subject: { kind: "user", id: me.id },
+    resource: "inventory_balances",
+    actions: ["export"],
+    effect: "deny",
+    scope: "all",
+    fields: {},
+  };
+  expect(
+    (
+      await page.request.post("/api/v1/policies/publish", {
+        headers,
+        data: {
+          expected_revision: revision.number,
+          rules: [...revision.rules, deny],
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  const csv = page.waitForResponse((response) =>
+    response.url().includes("/reports/inventory/export"),
+  );
+  await page.getByRole("button", { name: "导出 CSV", exact: true }).click();
+  expect((await csv).status()).toBe(200);
+  // Explicit deny removes every row before export aggregation; only the header is downloadable.
+  const after = await page.request.get(
+    "/api/v1/reports/inventory/export?warehouse_id=" + warehouse.id,
+  );
+  expect((await after.text()).trim().split("\n")).toHaveLength(1);
+  const current = await (await page.request.get("/api/v1/policies")).json();
+  expect(
+    (
+      await page.request.post("/api/v1/policies/publish", {
+        headers,
+        data: {
+          expected_revision: current.number,
+          rules: [
+            ...current.rules,
+            { ...deny, id: deny.id + "-read", actions: ["read"] },
+          ],
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole("button", { name: "刷新报表", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: product.name, exact: true }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByText("当前筛选与授权范围内没有合格记录。", { exact: true }),
+  ).toBeVisible();
+});
