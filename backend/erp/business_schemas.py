@@ -115,3 +115,7 @@ class SalesOrderInput(Strict):
 
 class SalesOrderUpdate(SalesOrderInput):
     version: int = Field(ge=1)
+
+
+class ShipInput(ReceiveInput):
+    """Explicit order-line quantities; same strict decimal and duplicate-line validation."""

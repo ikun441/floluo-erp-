@@ -19,6 +19,7 @@ def order_data(db, row):
             "id": line.id,
             "product_id": line.product_id,
             "quantity": line.quantity,
+            "shipped_quantity": line.shipped_quantity,
             "unit_price": line.unit_price,
             "amount": line.amount,
         }
@@ -29,7 +30,7 @@ def order_data(db, row):
     return data
 
 
-def order_scope(engine):
+def order_scope(engine, require_id=False):
     products = select(Product.id).where(engine.readable_scope("products", {"id"}))
     customers = select(Customer.id).where(engine.readable_scope("customers", {"id"}))
     bad_line = exists(
@@ -37,7 +38,12 @@ def order_scope(engine):
             SalesLine.order_id == SalesOrder.id, SalesLine.product_id.not_in(products)
         )
     )
-    return engine.scope("sales_orders", "read") & SalesOrder.customer_id.in_(customers) & ~bad_line
+    own = (
+        engine.readable_scope("sales_orders", {"id"})
+        if require_id
+        else engine.scope("sales_orders", "read")
+    )
+    return own & SalesOrder.customer_id.in_(customers) & ~bad_line
 
 
 def project(db, engine, row):
@@ -61,6 +67,13 @@ def project(db, engine, row):
                 line.pop("amount", None)
             elif mode == "masked":
                 line.update(unit_price="***", amount="***")
+    if isinstance(result.get("lines"), list):
+        shipped_mode = decision["fields"].get("shipped_quantity", "hidden")
+        for line in result["lines"]:
+            if shipped_mode == "hidden":
+                line.pop("shipped_quantity", None)
+            elif shipped_mode == "masked":
+                line["shipped_quantity"] = "***"
     return wire(result)
 
 
@@ -72,7 +85,9 @@ def locked_order(db, engine, record_id, action):
     )
     if row is None:
         raise HTTPException(404, "record_not_found")
-    reference(db, engine, "customers", row.customer_id, active=action not in {"update", "cancel"})
+    reference(
+        db, engine, "customers", row.customer_id, active=action not in {"update", "cancel", "ship"}
+    )
     for line in db.scalars(
         select(SalesLine)
         .where(SalesLine.order_id == row.id)
@@ -80,7 +95,11 @@ def locked_order(db, engine, record_id, action):
         .with_for_update()
     ):
         reference(
-            db, engine, "products", line.product_id, active=action not in {"update", "cancel"}
+            db,
+            engine,
+            "products",
+            line.product_id,
+            active=action not in {"update", "cancel", "ship"},
         )
     return row
 
@@ -110,6 +129,7 @@ def prepare_draft(db, engine, body, existing=None, new_id=None):
                 quantity=line.quantity.quantize(Decimal("0.0001")),
                 unit_price=line.unit_price.quantize(CENT),
                 amount=amount,
+                shipped_quantity=Decimal(0),
             )
         )
     if total > MAX_MONEY:
@@ -166,6 +186,10 @@ def transition(db, engine, row, action, version):
         "approve": {"submitted"},
         "cancel": {"draft", "submitted", "approved"},
     }
+    if action == "cancel" and any(
+        line["shipped_quantity"] > 0 for line in order_data(db, row)["lines"]
+    ):
+        raise HTTPException(409, "shipped_order_cannot_cancel")
     if row.status not in expected[action]:
         raise HTTPException(409, "invalid_order_transition")
     config = config_data(db)

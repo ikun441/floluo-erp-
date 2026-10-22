@@ -593,13 +593,64 @@ export function StockView({ api }: { api: Api }) {
           (after ? "&after=" + encodeURIComponent(after) : ""),
       ),
   });
-  const columns = Array.from(
-    new Set(query.data?.items.flatMap((row) => Object.keys(row)) ?? []),
+  const visibleFields = new Set(
+    query.data?.items.flatMap((row) => Object.keys(row)) ?? [],
   );
+  const preferred: Record<string, string[]> = {
+    inventory_balances: [
+      "warehouse_id",
+      "product_id",
+      "quantity",
+      "version",
+      "id",
+      "owner_id",
+      "department_id",
+    ],
+    stock_movements: [
+      "kind",
+      "quantity",
+      "warehouse_id",
+      "product_id",
+      "receipt_line_id",
+      "shipment_line_id",
+      "id",
+      "version",
+      "owner_id",
+      "department_id",
+    ],
+    purchase_receipts: [
+      "number",
+      "warehouse_id",
+      "order_id",
+      "lines",
+      "id",
+      "version",
+      "owner_id",
+      "department_id",
+    ],
+    sales_shipments: [
+      "number",
+      "warehouse_id",
+      "order_id",
+      "created_at",
+      "lines",
+      "id",
+      "version",
+      "owner_id",
+      "department_id",
+    ],
+  };
+  const columns = [
+    ...(preferred[resource] ?? []).filter((field) => visibleFields.has(field)),
+    ...Array.from(visibleFields).filter(
+      (field) => !(preferred[resource] ?? []).includes(field),
+    ),
+  ];
   const labels: Record<string, string> = {
     inventory_balances: "库存余额",
     stock_movements: "库存流水",
     purchase_receipts: "采购入库单",
+    sales_shipments: "销售出库单",
     id: "标识",
     version: "版本",
     quantity: "数量",
@@ -609,8 +660,10 @@ export function StockView({ api }: { api: Api }) {
     department_id: "部门",
     kind: "类型",
     receipt_line_id: "入库明细",
-    number: "入库单号",
-    order_id: "采购单",
+    shipment_line_id: "出库明细",
+    created_at: "创建时间",
+    number: "业务单号",
+    order_id: "来源订单",
     lines: "明细",
   };
   return (
@@ -618,25 +671,30 @@ export function StockView({ api }: { api: Api }) {
       <div className="section-heading">
         <div>
           <span className="eyebrow">INVENTORY / TRACEABILITY</span>
-          <h1>库存与入库</h1>
-          <p className="muted">库存由已批准采购的入库流水产生。</p>
+          <h1>库存与出入库</h1>
+          <p className="muted">
+            库存由采购入库增加、销售出库扣减；流水数量为正数，方向由类型区分。
+          </p>
         </div>
       </div>
       <div className="actions-row">
-        {["inventory_balances", "stock_movements", "purchase_receipts"].map(
-          (key) => (
-            <button
-              key={key}
-              aria-pressed={key === resource}
-              onClick={() => {
-                setResource(key);
-                setAfter(undefined);
-              }}
-            >
-              {labels[key]}
-            </button>
-          ),
-        )}
+        {[
+          "inventory_balances",
+          "stock_movements",
+          "purchase_receipts",
+          "sales_shipments",
+        ].map((key) => (
+          <button
+            key={key}
+            aria-pressed={key === resource}
+            onClick={() => {
+              setResource(key);
+              setAfter(undefined);
+            }}
+          >
+            {labels[key]}
+          </button>
+        ))}
       </div>
       <Failure error={query.error} />
       <section className="panel padded">
@@ -651,7 +709,11 @@ export function StockView({ api }: { api: Api }) {
               <thead>
                 <tr>
                   {columns.map((key) => (
-                    <th key={key}>{labels[key] ?? key}</th>
+                    <th key={key}>
+                      {key === "quantity" && resource === "stock_movements"
+                        ? "变动数量（绝对值）"
+                        : (labels[key] ?? key)}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -660,9 +722,14 @@ export function StockView({ api }: { api: Api }) {
                   <tr key={String(row.id ?? index)}>
                     {columns.map((key) => (
                       <td key={key}>
-                        {typeof row[key] === "object"
-                          ? JSON.stringify(row[key])
-                          : String(row[key] ?? "—")}
+                        {key === "kind"
+                          ? ({
+                              purchase_receipt: "采购入库（增加）",
+                              sales_shipment: "销售出库（扣减）",
+                            }[String(row[key])] ?? String(row[key] ?? "不可见"))
+                          : typeof row[key] === "object"
+                            ? JSON.stringify(row[key])
+                            : String(row[key] ?? "—")}
                       </td>
                     ))}
                   </tr>

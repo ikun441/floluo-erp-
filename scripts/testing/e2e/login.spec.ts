@@ -325,13 +325,13 @@ test("two real users approve and receive a purchase into inventory", async ({
     path: path.join(root, "output/playwright/purchase-order.png"),
     fullPage: true,
   });
-  await page.getByRole("button", { name: "库存与入库", exact: true }).click();
+  await page.getByRole("button", { name: "库存与出入库", exact: true }).click();
   await expect(
     page.getByRole("cell", { name: "3.0000", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "库存流水", exact: true }).click();
   await expect(
-    page.getByRole("cell", { name: "purchase_receipt", exact: true }),
+    page.getByRole("cell", { name: "采购入库（增加）", exact: true }),
   ).toBeVisible();
 });
 
@@ -881,4 +881,309 @@ test("customer master and sales draft edit submit independent approve with respo
   );
   await page.getByRole("button", { name: "取消销售单", exact: true }).click();
   expect((await cancelling).status()).toBe(200);
+});
+
+test("sales fulfillment retries a committed request and closes the real inventory loop", async ({
+  page,
+  browser,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf =
+    (await page.context().cookies()).find((c) => c.name === "erp_csrf")
+      ?.value ?? "";
+  const headers = { "X-CSRF-Token": csrf };
+  const me = await (await page.request.get("/api/v1/auth/me")).json();
+  const user = await (await page.request.get("/api/v1/users/" + me.id)).json();
+  const suffix = Date.now().toString();
+  async function create(resource: string, data: Record<string, unknown>) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers,
+      data: { data },
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  async function command(
+    path: string,
+    data: Record<string, unknown>,
+    key?: string,
+  ) {
+    const response = await page.request.post("/api/v1" + path, {
+      headers: { ...headers, ...(key ? { "Idempotency-Key": key } : {}) },
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  const supplier = await create("suppliers", {
+    code: "fulfill-s-" + suffix,
+    name: "发货供应商 " + suffix,
+    owner_id: me.id,
+  });
+  const customer = await create("customers", {
+    code: "fulfill-c-" + suffix,
+    name: "发货客户 " + suffix,
+    owner_id: me.id,
+  });
+  const warehouse = await create("warehouses", {
+    code: "fulfill-w-" + suffix,
+    name: "发货仓库 " + suffix,
+    owner_id: me.id,
+  });
+  const product = await create("products", {
+    sku: "fulfill-p-" + suffix,
+    name: "发货商品 " + suffix,
+    unit: "piece",
+    owner_id: me.id,
+  });
+  const reviewerName = "fulfill_reviewer_" + suffix,
+    reviewerPassword = "Fulfillment-fixture-" + "x".repeat(20);
+  await create("users", {
+    username: reviewerName,
+    password: reviewerPassword,
+    role_ids: user.role_ids,
+  });
+  const reviewer = await browser.newContext({
+    baseURL: "http://127.0.0.1:3000",
+  });
+  try {
+    const loginResponse = await reviewer.request.post("/api/v1/auth/login", {
+      data: { username: reviewerName, password: reviewerPassword },
+    });
+    expect(loginResponse.status()).toBe(200);
+    const reviewerCsrf =
+      (await reviewer.cookies()).find((c) => c.name === "erp_csrf")?.value ??
+      "";
+    async function approve(
+      resource: string,
+      order: { id: string; version: number },
+    ) {
+      const response = await reviewer.request.post(
+        "/api/v1/" + resource + "/" + order.id + "/approve",
+        {
+          headers: { "X-CSRF-Token": reviewerCsrf },
+          data: { version: order.version },
+        },
+      );
+      expect(response.status()).toBe(200);
+      return response.json();
+    }
+    const config = await (
+      await page.request.get("/api/v1/system_configuration")
+    ).json();
+    const configured = await page.request.patch(
+      "/api/v1/system_configuration",
+      {
+        headers,
+        data: {
+          version: config.version,
+          values: {
+            supported_currencies: ["CNY"],
+            tax_mode: "no_tax",
+            require_separate_approver: true,
+          },
+        },
+      },
+    );
+    expect(configured.status()).toBe(200);
+    let purchase = await command("/purchase_orders", {
+      supplier_id: supplier.id,
+      currency: "CNY",
+      lines: [{ product_id: product.id, quantity: "6", unit_price: "2.00" }],
+    });
+    purchase = await command("/purchase_orders/" + purchase.id + "/submit", {
+      version: purchase.version,
+    });
+    purchase = await approve("purchase_orders", purchase);
+    await command(
+      "/purchase_orders/" + purchase.id + "/receive",
+      {
+        version: purchase.version,
+        warehouse_id: warehouse.id,
+        lines: [{ line_id: purchase.lines[0].id, quantity: "5" }],
+      },
+      "fulfill-receive-" + suffix,
+    );
+    let order = await command("/sales_orders", {
+      customer_id: customer.id,
+      currency: "CNY",
+      lines: [{ product_id: product.id, quantity: "6", unit_price: "4.00" }],
+    });
+    order = await command("/sales_orders/" + order.id + "/submit", {
+      version: order.version,
+    });
+    order = await approve("sales_orders", order);
+    await page.getByRole("button", { name: "销售订单", exact: true }).click();
+    await page
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", { name: order.number, exact: true }),
+      })
+      .getByRole("button", { name: "查看销售单", exact: true })
+      .click();
+    const attempts: { key: string | undefined; body: string | null }[] = [];
+    await page.route(
+      "**/api/v1/sales_orders/" + order.id + "/ship",
+      async (route) => {
+        attempts.push({
+          key: route.request().headers()["idempotency-key"],
+          body: route.request().postData(),
+        });
+        if (attempts.length === 1) {
+          const committed = await route.fetch();
+          expect(committed.status()).toBe(200);
+          await route.abort("failed");
+        } else await route.continue();
+      },
+    );
+    await page
+      .getByRole("button", { name: "登记销售出库", exact: true })
+      .click();
+    let dialog = page.getByRole("dialog", {
+      name: "登记销售出库",
+      exact: true,
+    });
+    await dialog
+      .getByLabel("出库仓库", { exact: true })
+      .selectOption(warehouse.id);
+    await dialog.getByLabel("明细 1 本次出库数量", { exact: true }).fill("2");
+    await dialog
+      .getByRole("button", { name: "确认销售出库", exact: true })
+      .click();
+    await expect(dialog.getByRole("alert")).toBeVisible();
+    await expect(dialog.getByLabel("出库仓库", { exact: true })).toBeDisabled();
+    const retry = page.waitForResponse((r) =>
+      r.url().endsWith("/" + order.id + "/ship"),
+    );
+    await dialog
+      .getByRole("button", { name: "重试相同出库请求", exact: true })
+      .click();
+    expect((await retry).status()).toBe(200);
+    await expect(dialog).not.toBeVisible();
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0]).toEqual(attempts[1]);
+    expect(attempts[0].key).toBeTruthy();
+    let history = await (
+      await page.request.get("/api/v1/sales_shipments?order_id=" + order.id)
+    ).json();
+    expect(history.items).toHaveLength(1);
+    await expect(
+      page.getByRole("button", { name: "取消销售单", exact: true }),
+    ).not.toBeVisible();
+    await page
+      .getByRole("button", { name: "登记销售出库", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "登记销售出库", exact: true });
+    await dialog
+      .getByLabel("出库仓库", { exact: true })
+      .selectOption(warehouse.id);
+    await dialog.getByLabel("明细 1 本次出库数量", { exact: true }).fill("4");
+    const short = page.waitForResponse((r) =>
+      r.url().endsWith("/" + order.id + "/ship"),
+    );
+    await dialog
+      .getByRole("button", { name: "确认销售出库", exact: true })
+      .click();
+    expect((await short).status()).toBe(409);
+    await expect(dialog.getByRole("alert")).toHaveText(
+      "当前仓库库存不足，本次出库未扣减库存",
+    );
+    await expect(
+      dialog.getByLabel("明细 1 本次出库数量", { exact: true }),
+    ).toBeEnabled();
+    await dialog.getByLabel("明细 1 本次出库数量", { exact: true }).fill("3");
+    const partial = page.waitForResponse((r) =>
+      r.url().endsWith("/" + order.id + "/ship"),
+    );
+    await dialog
+      .getByRole("button", { name: "确认销售出库", exact: true })
+      .click();
+    expect((await partial).status()).toBe(200);
+    await expect(dialog).not.toBeVisible();
+    purchase = await (
+      await page.request.get("/api/v1/purchase_orders/" + purchase.id)
+    ).json();
+    await command(
+      "/purchase_orders/" + purchase.id + "/receive",
+      {
+        version: purchase.version,
+        warehouse_id: warehouse.id,
+        lines: [{ line_id: purchase.lines[0].id, quantity: "1" }],
+      },
+      "fulfill-refill-" + suffix,
+    );
+    await page
+      .getByRole("button", { name: "登记销售出库", exact: true })
+      .click();
+    dialog = page.getByRole("dialog", { name: "登记销售出库", exact: true });
+    await dialog
+      .getByLabel("出库仓库", { exact: true })
+      .selectOption(warehouse.id);
+    await dialog.getByLabel("明细 1 本次出库数量", { exact: true }).fill("1");
+    const complete = page.waitForResponse((r) =>
+      r.url().endsWith("/" + order.id + "/ship"),
+    );
+    await dialog
+      .getByRole("button", { name: "确认销售出库", exact: true })
+      .click();
+    expect((await complete).status()).toBe(200);
+    await expect(dialog).not.toBeVisible();
+    const final = await (
+      await page.request.get("/api/v1/sales_orders/" + order.id)
+    ).json();
+    expect(final.status).toBe("shipped");
+    expect(final.lines[0].shipped_quantity).toBe("6.0000");
+    await expect(
+      page.getByRole("button", { name: "登记销售出库", exact: true }),
+    ).not.toBeVisible();
+    history = await (
+      await page.request.get("/api/v1/sales_shipments?order_id=" + order.id)
+    ).json();
+    expect(history.items).toHaveLength(3);
+    const balances = await (
+      await page.request.get("/api/v1/inventory_balances?limit=100")
+    ).json();
+    expect(
+      balances.items.find(
+        (row: { product_id: string; warehouse_id: string }) =>
+          row.product_id === product.id && row.warehouse_id === warehouse.id,
+      ).quantity,
+    ).toBe("0.0000");
+    await page
+      .getByRole("button", { name: "查看出库明细", exact: true })
+      .first()
+      .click();
+    await page.screenshot({
+      path: path.join(root, "output/playwright/shipping-desktop.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: path.join(root, "output/playwright/shipping-mobile.png"),
+      fullPage: true,
+    });
+    await page
+      .getByRole("button", { name: "库存与出入库", exact: true })
+      .click();
+    await page.getByRole("button", { name: "库存流水", exact: true }).click();
+    await expect(
+      page.getByRole("cell", { name: "销售出库（扣减）", exact: true }).first(),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "销售出库单", exact: true }).click();
+    await expect(
+      page.getByRole("cell", { name: history.items[0].number, exact: true }),
+    ).toBeVisible();
+    await page.screenshot({
+      path: path.join(root, "output/playwright/shipping-stock-mobile.png"),
+      fullPage: true,
+    });
+  } finally {
+    await reviewer.close();
+  }
 });

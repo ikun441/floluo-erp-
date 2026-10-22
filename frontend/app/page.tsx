@@ -135,9 +135,16 @@ const errorMessages: Record<string, string> = {
   version_conflict: "记录已更新，请刷新后重试",
   invalid_or_excess_receipt_quantity:
     "收货数量超过剩余数量，或明细不属于当前订单",
-  idempotency_payload_conflict: "同一入库请求不能修改内容后重用",
+  idempotency_payload_conflict: "同一业务请求不能修改内容后重用",
   line_amount_precision_or_overflow: "行金额必须精确到分且不超过金额上限",
   order_amount_overflow: "订单总额超过上限",
+  inventory_unavailable: "库存记录不存在或当前账号不能读取数量",
+  insufficient_stock: "当前仓库库存不足，本次出库未扣减库存",
+  sales_order_not_shippable: "销售单尚未批准或已完成出库",
+  invalid_or_excess_shipment_quantity:
+    "出库数量超过订单剩余数量，或明细不属于当前销售单",
+  shipped_order_cannot_cancel: "订单已有出库记录，不能直接取消",
+  shipment_read_denied: "当前权限不能读取此出库记录",
   order_not_approved: "当前采购单尚未批准或已完成入库",
   invalid_order_transition: "当前订单状态不支持此操作",
   field_write_denied: "当前账号没有部分字段的修改权限",
@@ -892,6 +899,7 @@ function Dashboard() {
             "版本化策略与权限模拟",
             "采购审批、分批入库与库存流水",
             "客户资料、销售订单与独立审批",
+            "销售分批出库、库存不足保护与出库流水",
             "OneBot绑定、离线助手与回复监控",
           ].map((s) => (
             <p className="checkline" key={s}>
@@ -903,10 +911,10 @@ function Dashboard() {
         <section className="panel padded">
           <h3>接下来</h3>
           <p className="muted">
-            销售出库 → 库存分析与报表 → 可选 AI → 通用审批。
+            库存分析与报表 → 可选 AI → 通用审批 → 部署完善。
           </p>
           <div className="notice compact">
-            销售订单现已接入真实业务；本阶段审批完成后不预留或扣减库存，出库将在后续切片交付。
+            采购入库与销售出库已形成库存闭环；审批不预留库存，实际发货时按当前权限和可用数量扣减。
           </div>
         </section>
       </div>
@@ -957,7 +965,7 @@ function Workspace() {
     { key: "procurement", label: "采购订单", icon: Box },
     { key: "sales", label: "销售订单", icon: Box },
     { key: "customers", label: "客户资料", icon: Building2 },
-    { key: "stock", label: "库存与入库", icon: Box },
+    { key: "stock", label: "库存与出入库", icon: Box },
     { key: "operations", label: "操作工作台", icon: ShieldCheck },
     { key: "messaging", label: "消息接入", icon: Users },
     { key: "configuration", label: "业务规则配置", icon: ShieldCheck },
@@ -1022,7 +1030,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.6 · 开发版</small>
+            统一授权，安心协作<small>v1.0.7 · 开发版</small>
           </span>
         </div>
       </aside>

@@ -25,7 +25,7 @@ from .message_models import (
     OneBotInstance,
 )
 from .models import Department, Gate, PolicyRevision, Position, Product, Role, User, UserRole
-from .sales_models import Customer, SalesOrder
+from .sales_models import Customer, SalesOrder, SalesShipment
 from .schemas import Rule
 
 
@@ -193,6 +193,7 @@ RESOURCES.update(
                     "quantity",
                     "kind",
                     "receipt_line_id",
+                    "shipment_line_id",
                     "owner_id",
                     "department_id",
                 }
@@ -216,7 +217,7 @@ RESOURCES.update(
 RESOURCES["warehouses"] = Resource(
     Warehouse,
     RESOURCES["warehouses"].fields,
-    frozenset({"read", "create", "update", "receive"}),
+    frozenset({"read", "create", "update", "receive", "ship"}),
     "owner_id",
     "department_id",
 )
@@ -230,11 +231,33 @@ RESOURCES["customers"] = Resource(
 )
 RESOURCES["sales_orders"] = Resource(
     SalesOrder,
-    (RESOURCES["purchase_orders"].fields - {"supplier_id"}) | {"customer_id"},
-    frozenset({"read", "create", "update", "submit", "approve", "cancel"}),
+    (RESOURCES["purchase_orders"].fields - {"supplier_id"}) | {"customer_id", "shipped_quantity"},
+    frozenset({"read", "create", "update", "submit", "approve", "cancel", "ship"}),
     "owner_id",
     "department_id",
-    frozenset({"lines", "unit_price", "line_amount"}),
+    frozenset({"lines", "unit_price", "line_amount", "shipped_quantity"}),
+)
+
+
+RESOURCES["sales_shipments"] = Resource(
+    SalesShipment,
+    frozenset(
+        {
+            "id",
+            "version",
+            "number",
+            "order_id",
+            "warehouse_id",
+            "owner_id",
+            "department_id",
+            "created_at",
+            "lines",
+        }
+    ),
+    frozenset({"read", "create"}),
+    "owner_id",
+    "department_id",
+    frozenset({"lines", "created_at"}),
 )
 
 

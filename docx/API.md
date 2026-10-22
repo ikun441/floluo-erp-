@@ -99,3 +99,20 @@
 - POST `/api/v1/sales_orders/{id}/submit|approve|cancel`：`{version}`，当前权限与旧/新状态均校验；销售创建人不得自批。提交/审批要求币种和no_tax配置；未配置409。当前无销售出库、删除、导出或AI/OneBot销售工具接口。
 
 写入与outbox/审计同事务，写入成功但缺少读取权限时只返回`{saved:true}`；所有路由使用相同会话/CSRF/Origin/Gate边界。升级需显式给旧角色授权customers/sales_orders。
+
+
+## v1.0.7 销售出库与库存方向
+
+| 方法 | 路径 | 请求与行为 |
+| --- | --- | --- |
+| POST | `/api/v1/sales_orders/{id}/ship` | Header `Idempotency-Key`；body `{version,warehouse_id,lines:[{line_id,quantity}]}` |
+| GET | `/api/v1/sales_shipments?limit=50&after=&order_id=` | 当前可读出库单，limit≤100，按ID游标分页 |
+| GET | `/api/v1/sales_shipments/{id}` | 当前可读发货单及受保护明细 |
+
+出库明细最多100行，至少一行；line_id必须属于当前订单，不能重复，quantity为正数十进制字符串或整数（最多4位小数），拒绝float/bool/额外身份字段。按商品合计需求后整体校验，任一行超计划或库存不足409，库存不存在或数量不可读统一404 inventory_unavailable。订单/仓库ship及发货create、字段/引用权限均校验，待审批策略不能直接执行。
+
+幂等键为1–128可打印非空ASCII字符，按当前用户/销售出库命名空间隔离。相同原version/仓库/规范化明细重放返回已有发货单的当前投影，不再次扣库存；不同内容409。重放仍需当前ship/create及来源读取授权；原配置/资料停用不会重写历史。新发货无回读权限只返回saved，重放无读取权限403。
+
+sales_orders状态筛选新增partially_shipped/shipped；lines中shipped_quantity由新增同名虚拟字段权限控制，未授权隐藏、masked脱敏。sales_shipments的order_id筛选、id游标须相应字段可读。当前无发货编辑/删除/强制重发接口。
+
+stock_movements的quantity继续为正数：purchase_receipt增加，sales_shipment扣减，按kind和receipt_line_id/shipment_line_id唯一来源约束关联。查询在LIMIT前应用两种业务来源的权限；库存页展示类型方向，不返回未经授权的销售记录或价格。

@@ -4,7 +4,7 @@ import json
 from decimal import Decimal, localcontext
 
 from fastapi import HTTPException
-from sqlalchemy import delete, exists, select
+from sqlalchemy import and_, delete, exists, or_, select
 
 from .audit import digest
 from .business_models import (
@@ -95,7 +95,17 @@ def scoped_statement(engine, resource):
             PurchaseReceipt.warehouse_id.in_(warehouses),
         )
         lines = select(ReceiptLine.id).where(ReceiptLine.receipt_id.in_(receipts))
-        statement = statement.where(model.receipt_line_id.in_(lines))
+        from .shipment import source_line_ids
+
+        statement = statement.where(
+            or_(
+                and_(model.kind == "purchase_receipt", model.receipt_line_id.in_(lines)),
+                and_(
+                    model.kind == "sales_shipment",
+                    model.shipment_line_id.in_(source_line_ids(engine)),
+                ),
+            )
+        )
     return statement
 
 

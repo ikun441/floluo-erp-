@@ -1,6 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import ShipmentEditor from "./ShipmentEditor";
 import { Plus, X } from "lucide-react";
 
 type Api = (path: string, init?: RequestInit) => Promise<unknown>;
@@ -9,6 +10,7 @@ type Line = {
   id?: string;
   product_id: string;
   quantity: string;
+  shipped_quantity?: string;
   unit_price?: string;
   amount?: string;
 };
@@ -27,6 +29,8 @@ const statuses: Record<string, string> = {
   draft: "草稿",
   submitted: "待审批",
   approved: "已批准",
+  partially_shipped: "部分出库",
+  shipped: "已出库",
   cancelled: "已取消",
 };
 const visibleId = (value: unknown): value is string =>
@@ -269,7 +273,8 @@ export default function SalesView({ api }: { api: Api }) {
   const [after, setAfter] = useState<string>(),
     [status, setStatus] = useState("");
   const [selected, setSelected] = useState<string>(),
-    [editor, setEditor] = useState<Order | null>();
+    [editor, setEditor] = useState<Order | null>(),
+    [shipping, setShipping] = useState<Order>();
   const [error, setError] = useState<unknown>(),
     [busy, setBusy] = useState(false),
     [feedback, setFeedback] = useState("");
@@ -304,6 +309,17 @@ export default function SalesView({ api }: { api: Api }) {
         visibleId(line.quantity),
     );
   const actionable = visibleId(order?.id) && typeof order?.version === "number";
+  async function refreshShipments() {
+    await qc.invalidateQueries({
+      predicate: (query) =>
+        [
+          "sales_orders",
+          "sales_shipments",
+          "inventory_balances",
+          "stock_movements",
+        ].includes(String(query.queryKey[0])),
+    });
+  }
   async function saved() {
     await qc.invalidateQueries({ queryKey: ["sales_orders"] });
     setFeedback("销售草稿已保存");
@@ -486,9 +502,27 @@ export default function SalesView({ api }: { api: Api }) {
                   取消销售单
                 </button>
               )}
+            {actionable &&
+              ["approved", "partially_shipped"].includes(order.status ?? "") &&
+              Array.isArray(order.lines) &&
+              order.lines.every(
+                (line) =>
+                  visibleId(line.id) &&
+                  visibleId(line.product_id) &&
+                  visibleId(line.quantity) &&
+                  visibleId(line.shipped_quantity),
+              ) && (
+                <button
+                  className="primary"
+                  disabled={busy}
+                  onClick={() => setShipping(order)}
+                >
+                  登记销售出库
+                </button>
+              )}
           </div>
           <p className="muted">
-            销售单创建人不能审批自己的订单。本阶段审批完成后不预留或扣减库存，出库功能开发中。
+            销售单创建人不能审批自己的订单。批准后按实际发货分批登记出库；已有出库记录的订单不能直接取消。
           </p>
           {Array.isArray(order.lines) ? (
             <div className="table-wrap">
@@ -496,7 +530,8 @@ export default function SalesView({ api }: { api: Api }) {
                 <thead>
                   <tr>
                     <th>商品标识</th>
-                    <th>数量</th>
+                    <th>计划数量</th>
+                    <th>已发数量</th>
                     <th>单价</th>
                     <th>行金额</th>
                   </tr>
@@ -506,6 +541,7 @@ export default function SalesView({ api }: { api: Api }) {
                     <tr key={line.id ?? index}>
                       <td>{line.product_id}</td>
                       <td>{line.quantity}</td>
+                      <td>{line.shipped_quantity ?? "不可见"}</td>
                       <td>{line.unit_price ?? "不可见"}</td>
                       <td>{line.amount ?? "不可见"}</td>
                     </tr>
@@ -518,6 +554,24 @@ export default function SalesView({ api }: { api: Api }) {
           )}
         </section>
       )}
+      {selected && order && (
+        <ShipmentHistory key={selected} api={api} orderId={selected} />
+      )}
+      {shipping && (
+        <ShipmentEditor
+          api={api}
+          order={shipping}
+          close={() => {
+            setShipping(undefined);
+            void refreshShipments();
+          }}
+          saved={async () => {
+            await refreshShipments();
+            setShipping(undefined);
+            setFeedback("销售出库已登记");
+          }}
+        />
+      )}
       {editor !== undefined && (
         <DraftEditor
           api={api}
@@ -527,5 +581,114 @@ export default function SalesView({ api }: { api: Api }) {
         />
       )}
     </>
+  );
+}
+
+type Shipment = {
+  id?: string;
+  number?: string;
+  warehouse_id?: string;
+  created_at?: string;
+  lines?: { id?: string; product_id: string; quantity: string }[] | string;
+};
+function ShipmentHistory({ api, orderId }: { api: Api; orderId: string }) {
+  const [after, setAfter] = useState<string>(),
+    [expanded, setExpanded] = useState<string>();
+  const query = useQuery({
+    queryKey: ["sales_shipments", orderId, after],
+    queryFn: () =>
+      get<{ items: Shipment[] }>(
+        api,
+        "/sales_shipments?limit=50&order_id=" +
+          encodeURIComponent(orderId) +
+          (after ? "&after=" + encodeURIComponent(after) : ""),
+      ),
+  });
+  const rows = query.error ? [] : (query.data?.items ?? []),
+    selected = rows.find((row) => row.id === expanded);
+  return (
+    <section className="panel padded">
+      <div className="panel-heading sales-detail-heading">
+        <h2>销售出库记录</h2>
+        <button onClick={() => void query.refetch()}>刷新出库记录</button>
+      </div>
+      <Failure error={query.error} />
+      {query.isPending ? (
+        <p className="empty">加载出库记录…</p>
+      ) : !rows.length ? (
+        <p className="empty">当前没有可查看的出库记录</p>
+      ) : (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>出库单号</th>
+                <th>仓库标识</th>
+                <th>创建时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={row.id ?? index}>
+                  <td>{row.number ?? "不可见"}</td>
+                  <td>{row.warehouse_id ?? "不可见"}</td>
+                  <td>
+                    {row.created_at && row.created_at !== "***"
+                      ? new Date(row.created_at).toLocaleString()
+                      : "不可见"}
+                  </td>
+                  <td>
+                    {visibleId(row.id) && (
+                      <button
+                        onClick={() =>
+                          setExpanded(expanded === row.id ? undefined : row.id)
+                        }
+                      >
+                        查看出库明细
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {selected &&
+        (Array.isArray(selected.lines) ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>商品标识</th>
+                  <th>本次已发数量</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selected.lines.map((line, index) => (
+                  <tr key={line.id ?? index}>
+                    <td>{line.product_id}</td>
+                    <td>{line.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="empty">出库明细不可见</p>
+        ))}
+      <div className="panel-footer">
+        <button disabled={!after} onClick={() => setAfter(undefined)}>
+          出库记录首页
+        </button>
+        <button
+          disabled={rows.length < 50 || !visibleId(rows.at(-1)?.id)}
+          onClick={() => setAfter(rows.at(-1)?.id)}
+        >
+          更多出库记录
+        </button>
+      </div>
+    </section>
   );
 }

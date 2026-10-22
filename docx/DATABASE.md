@@ -19,7 +19,7 @@
 | purchase_line → purchase_order / product | 正数数量、非负单价，金额服务端计算 |
 | receipt_line → purchase_line / warehouse | 收货分摊、唯一业务来源防重复 |
 | inventory_balance → warehouse / product | 复合唯一，NUMERIC 数量与版本 |
-| stock_movement → product / warehouse / source | 当前仅正数采购入库模型；出库/冲销将使用后续迁移扩展 |
+| stock_movement → product / warehouse / source | 正数数量，kind区分采购增加/销售减少；采购/销售来源互斥，冲销待后续 |
 | message_binding → instance / user | 平台身份与实例复合唯一，验证挑战、撤销状态 |
 | message_inbox / command_execution | 平台事件唯一键、用户幂等键、payload 摘要 |
 | conversation → binding / intent | 状态、过期时间、确认摘要、版本 |
@@ -58,3 +58,10 @@ onebot_instance 1—0..1 onebot_connection；message_inbox 1—0..1 message_deli
 ## v1.0.6 客户与销售订单
 
 新增be0f9a8b7c6d（继承ad9e8f7a6b5c）：customer唯一编码/归属外键，sales_order客户/归属/审批人外键、唯一SO单号、非负NUMERIC总额及状态/审批人配对约束；sales_line订单/商品外键、订单内行号唯一、正数数量和非负金额。均包含UTC时间/version及FK索引。既有表、迁移、库存来源约束和策略快照不改动，不造业务资料；存在客户或销售历史时拒绝破坏性降级。完整ER关系与安全默认见SALES.md。
+
+
+## v1.0.7 发货与方向流水
+
+迁移ce1a0b9c8d7e新增sales_shipment、shipment_line、shipment_execution。销售行shipped_quantity默认0并受0≤已发≤计划约束；订单支持partially_shipped/shipped且保留审批人约束。发货/发货行/命令记录采用追加存储，PG阻止UPDATE/DELETE/TRUNCATE，SQLite阻止UPDATE/DELETE。
+
+stock_movement新增唯一shipment_line_id外键，receipt_line_id变可空；ck_stock_movement_source要求kind与唯一业务来源配对。原正数数量检查、旧采购流水、唯一/外键/索引和不可变触发器均保留。出库历史存在时拒绝破坏性降级；无出库时可回退至be0f9a8b7c6d并保留旧采购/销售数据。SQLite重建显式保留未命名检查约束，并在事务前后检查外键。完整关系见[出库设计](SHIPMENTS.md)。

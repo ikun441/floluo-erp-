@@ -47,3 +47,10 @@ Web/OneBot → message_operations应用服务 → procurement.prepare_draft纯�
 ## v1.0.6 客户与销售基础
 
 SalesView → sales_api → sales → order_support + Engine → sales_models/PostgreSQL。客户资料使用同一受限目录服务，权限字段/动作通过注册表驱动权限中心。order_support仅提取原有受限引用、配置、版本、线格式及outbox工具；procurement保留导入兼容，不改变其调用契约。销售和采购共享币种/税配置，销售始终独立审批；销售订单只进入草稿/提交/批准/取消状态，本切片不变动库存。未来出库复用库存领域事务，不直接改余额。详见SALES.md。
+
+
+## v1.0.7 销售出库
+
+SalesView/ShipmentEditor → sales_api → shipment应用服务 → 当前订单/授权/库存行锁。审批只批准订单，实际发货才扣库存；发货、明细、不可变方向流水、余额、订单进度、幂等、outbox和审计同事务。当前Gate仍串行化授权与业务命令，行锁以订单/销售行/商品稳定排序，未来细化Gate前须保留真实PG争抢库存测试。
+
+已有库存读取入口兼容采购与销售两种来源，在SQL分页前分别约束对应订单、客户/供应商、商品、仓库和来源单据ID。协议/AI未新增出库工具，仍不能直接操作库存。详见[出库服务边界](SHIPMENTS.md)。

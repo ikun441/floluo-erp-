@@ -57,3 +57,18 @@ onebot_connections与message_deliveries仅有read；后者支持own/records/all�
 customers复用目录read/create/update；sales_orders注册read/create/update/submit/approve/cancel，支持own/department/departments/records/all。只在新bootstrap显式生成策略，已发布快照不改动，升级需管理员在权限中心显式授予。sales_orders字段为订单ID/版本/单号/customer_id/owner_id/department_id/currency/total/status/note/approved_by/lines/unit_price/line_amount；后三者为虚拟字段，禁止SQL条件。
 
 销售列表/详情在SQL中过滤当前客户和所有商品的可读ID，状态/游标探测须相应字段可读；金额三字段取最严格投影，不能从明细反推隐藏总额。编辑旧/新候选与实际提交字段均校验；状态迁移旧/新状态授权，requires_approval继续拒绝，独立审批不替代业务权限。创建归属取服务端当前身份。审批不产生库存权限或变动。
+
+
+## v1.0.7 出库授权矩阵
+
+| 资源/字段 | 必需授权或用途 |
+| --- | --- |
+| sales_orders.ship | 发货前/后订单状态均授权，显式拒绝优先 |
+| warehouses.ship | 当前目标仓库有出库操作权限，且仓库ID可读 |
+| sales_shipments.create | 发货资源符合范围，order_id/warehouse_id/lines可写 |
+| inventory_balances.read | 目标库存当前id和quantity可读，否则统一404 |
+| customers/products.read | 客户及订单全部商品ID当前可读，本次发货引用须启用 |
+| sales_shipments.read | 查询/回放发货记录；范围与来源关系在分页前过滤 |
+| sales_orders.shipped_quantity | 新增虚拟字段，控制各行已发数量；不允许SQL条件 |
+
+旧策略快照不变，不自动增加ship动作、发货资源或已发字段。发货读取不返回订单金额；发货与库存流水的来源ID须当前可读，隐藏来源ID不能通过游标或关联绕过。回放重新校验当前ship/create和读取授权，不能取队列里的旧数据或重复执行扣减。库存余额/流水仍无通用写入接口。

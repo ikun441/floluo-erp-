@@ -115,8 +115,18 @@ class InventoryBalance(Row, Base):
 
 class StockMovement(Row, Base):
     __tablename__ = "stock_movement"
-    __table_args__ = (CheckConstraint("quantity > 0"),)
-    receipt_line_id: Mapped[str] = mapped_column(ForeignKey("receipt_line.id"), unique=True)
+    __table_args__ = (
+        CheckConstraint("quantity > 0"),
+        CheckConstraint(
+            "(kind = 'purchase_receipt' AND receipt_line_id IS NOT NULL AND shipment_line_id IS NULL) OR (kind = 'sales_shipment' AND receipt_line_id IS NULL AND shipment_line_id IS NOT NULL)",
+            name="ck_stock_movement_source",
+        ),
+        UniqueConstraint("shipment_line_id", name="uq_stock_movement_shipment_line"),
+    )
+    shipment_line_id: Mapped[str | None] = mapped_column(
+        ForeignKey("shipment_line.id", name="fk_stock_movement_shipment_line")
+    )
+    receipt_line_id: Mapped[str | None] = mapped_column(ForeignKey("receipt_line.id"), unique=True)
     warehouse_id: Mapped[str] = mapped_column(ForeignKey("warehouse.id"), index=True)
     product_id: Mapped[str] = mapped_column(ForeignKey("product.id"), index=True)
     owner_id: Mapped[str] = mapped_column(ForeignKey("erp_user.id"), index=True)

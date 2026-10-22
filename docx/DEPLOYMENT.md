@@ -53,3 +53,10 @@ OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实
 ## v1.0.6 升级补充
 
 先备份数据库，停止旧后端并执行`alembic upgrade head`至be0f9a8b7c6d，再启动新版本。新迁移只添加客户/销售表，保留既有数据/策略。已有管理员在权限中心明确授权customers和sales_orders字段、动作与范围；原角色不会自动获得权限。首次使用销售前在「业务规则配置」明确币种/no_tax，创建人与审批人须不同。新表已有历史时不能用downgrade删除，应恢复已验证备份或向前修复。销售出库尚未交付。
+
+
+## v1.0.7 出库迁移与授权
+
+备份并停止旧后端，执行`alembic upgrade head`至ce1a0b9c8d7e后启动新版本，避免旧发送/业务代码混跑。新增三张发货历史表，扩展销售状态/已发数量和库存唯一来源；旧记录不补发、不改数量。SQLite仅本机开发/测试，使用Alembic专用迁移连接重建表并恢复约束/触发器、核对外键，应用连接仍启用外键；生产继续使用PostgreSQL。
+
+升级后显式授予目标角色sales_orders.ship、sales_orders.shipped_quantity读取、warehouses.ship、sales_shipments.create/read及所需字段/范围；另需库存id/quantity与业务引用可读。旧角色不会自动获得这些能力。有发货历史/已发数量时禁止破坏性降级，需使用经验证的备份恢复或向前修复；生产备份恢复与容器验收仍待完成。

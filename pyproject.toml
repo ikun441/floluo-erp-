@@ -1,6 +1,6 @@
 [project]
 name = "floluo-erp"
-version = "1.0.6"
+version = "1.0.7"
 description = "Single-enterprise offline-first ERP"
 requires-python = ">=3.12"
 dependencies = [

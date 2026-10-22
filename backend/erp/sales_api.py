@@ -2,15 +2,16 @@
 
 from typing import Literal
 
-from fastapi import Depends, HTTPException, Query, Request
+from fastapi import Depends, Header, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from . import sales as service
+from . import shipment
 from .audit import change_summary
-from .business_schemas import SalesOrderInput, SalesOrderUpdate, Transition
+from .business_schemas import SalesOrderInput, SalesOrderUpdate, ShipInput, Transition
 from .permissions import Engine
-from .sales_models import SalesOrder
+from .sales_models import SalesOrder, SalesShipment
 
 
 def register(app, database, authorized_engine):
@@ -24,7 +25,10 @@ def register(app, database, authorized_engine):
     def listing(
         limit: int = Query(50, ge=1, le=100),
         after: str | None = Query(None, max_length=36),
-        status: Literal["draft", "submitted", "approved", "cancelled"] | None = None,
+        status: Literal[
+            "draft", "submitted", "approved", "partially_shipped", "shipped", "cancelled"
+        ]
+        | None = None,
         engine: Engine = Depends(authorized_engine),
         db: Session = Depends(database, scope="function"),
     ):
@@ -110,3 +114,62 @@ def register(app, database, authorized_engine):
 
     for action in ("submit", "approve", "cancel"):
         transition_route(action)
+
+    @app.post("/api/v1/sales_orders/{record_id}/ship")
+    def ship(
+        request: Request,
+        record_id: str,
+        body: ShipInput,
+        idempotency_key: str = Header(default=""),
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
+        row = service.locked_order(db, engine, record_id, "ship")
+        old = service.order_data(db, row)
+        saved, replayed = shipment.ship(db, engine, row, body, idempotency_key)
+        request.state.audit_details = change_summary(
+            "sales_orders",
+            row.id,
+            old,
+            service.order_data(db, row),
+            [] if replayed else {"status", "shipped_quantity"},
+        )
+        request.state.audit_details["replayed"] = replayed
+        visible = db.scalar(shipment.scoped_statement(engine).where(SalesShipment.id == saved.id))
+        return shipment.project(db, engine, visible) if visible else {"saved": True}
+
+    @app.get("/api/v1/sales_shipments")
+    def shipments(
+        limit: int = Query(50, ge=1, le=100),
+        after: str | None = Query(None, max_length=36),
+        order_id: str | None = Query(None, max_length=36),
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
+        statement = shipment.scoped_statement(engine)
+        if after:
+            statement = statement.where(
+                engine.readable_scope("sales_shipments", {"id"}), SalesShipment.id > after
+            )
+        if order_id:
+            statement = statement.where(
+                engine.readable_scope("sales_shipments", {"order_id"}),
+                SalesShipment.order_id == order_id,
+            )
+        return {
+            "items": [
+                shipment.project(db, engine, row)
+                for row in db.scalars(statement.order_by(SalesShipment.id).limit(limit))
+            ]
+        }
+
+    @app.get("/api/v1/sales_shipments/{record_id}")
+    def shipment_detail(
+        record_id: str,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
+        row = db.scalar(shipment.scoped_statement(engine).where(SalesShipment.id == record_id))
+        if row is None:
+            raise HTTPException(404, "record_not_found")
+        return shipment.project(db, engine, row)

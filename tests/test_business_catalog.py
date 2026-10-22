@@ -170,7 +170,7 @@ def test_registry_requires_auth_and_new_resources_require_explicit_policy(env):
     assert TestClient(env["app"]).get("/api/v1/resource_catalog").status_code == 401
     admin, alice = env["client"](), env["client"]("alice")
     catalog = admin.get("/api/v1/resource_catalog").json()
-    assert catalog["warehouses"]["actions"] == ["create", "read", "receive", "update"]
+    assert catalog["warehouses"]["actions"] == ["create", "read", "receive", "ship", "update"]
     assert "own" not in catalog["categories"]["scopes"]
     assert "category_id" in catalog["products"]["fields"]
     assert alice.get("/api/v1/suppliers").json() == {"items": []}
