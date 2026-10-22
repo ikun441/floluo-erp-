@@ -72,3 +72,9 @@ customers复用目录read/create/update；sales_orders注册read/create/update/s
 | sales_orders.shipped_quantity | 新增虚拟字段，控制各行已发数量；不允许SQL条件 |
 
 旧策略快照不变，不自动增加ship动作、发货资源或已发字段。发货读取不返回订单金额；发货与库存流水的来源ID须当前可读，隐藏来源ID不能通过游标或关联绕过。回放重新校验当前ship/create和读取授权，不能取队列里的旧数据或重复执行扣减。库存余额/流水仍无通用写入接口。
+
+## v1.0.8 统计与导出
+
+inventory_balances、stock_movements、purchase_orders、sales_orders新增report/export动作，旧策略不自动扩权。统计=read∩report，导出=read∩report∩export，各动作的范围、条件、显式拒绝、待审批和字段最严约束均在SQL聚合前应用。Engine.field_scope泛化原可读字段SQL过滤，readable_scope保持原契约。
+
+库存要求warehouse_id/product_id/quantity，流水另需kind；关联商品id/sku/name/unit、仓库id/code/name必须完整可读。订单数量要求status/currency，金额要求三项total/unit_price/line_amount均完整可读；否则该行不参与对应指标，不返回排除行数。所有筛选/分组字段在授权后使用。既有来源单据关系约束继续生效。详见[配置与统计口径](REPORTS.md)。

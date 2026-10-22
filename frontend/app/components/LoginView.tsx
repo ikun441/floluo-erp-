@@ -199,7 +199,7 @@ export default function LoginView({ done, authenticate }: Props) {
             企业工作空间
           </span>
           <span>
-            V 1.0.7 <i>BETA</i>
+            V 1.0.8 <i>BETA</i>
           </span>
         </motion.div>
         <motion.section

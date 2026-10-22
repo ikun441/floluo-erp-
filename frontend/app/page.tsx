@@ -1037,7 +1037,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.7 · 开发版</small>
+            统一授权，安心协作<small>v1.0.8 · 开发版</small>
           </span>
         </div>
       </aside>

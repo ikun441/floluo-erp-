@@ -60,3 +60,9 @@ OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实
 备份并停止旧后端，执行`alembic upgrade head`至ce1a0b9c8d7e后启动新版本，避免旧发送/业务代码混跑。新增三张发货历史表，扩展销售状态/已发数量和库存唯一来源；旧记录不补发、不改数量。SQLite仅本机开发/测试，使用Alembic专用迁移连接重建表并恢复约束/触发器、核对外键，应用连接仍启用外键；生产继续使用PostgreSQL。
 
 升级后显式授予目标角色sales_orders.ship、sales_orders.shipped_quantity读取、warehouses.ship、sales_shipments.create/read及所需字段/范围；另需库存id/quantity与业务引用可读。旧角色不会自动获得这些能力。有发货历史/已发数量时禁止破坏性降级，需使用经验证的备份恢复或向前修复；生产备份恢复与容器验收仍待完成。
+
+## v1.0.8 报表升级
+
+本版不改变数据库结构，Alembic head仍为ce1a0b9c8d7e；已有实例仍应按原流程备份并检查迁移头。部署新后端/前端后，管理员在权限中心显式授予四类主资源report和按需export、相应范围与完整可读字段，旧策略不自动扩权。字段/关联清单见[报表配置](REPORTS.md)。
+
+生产PostgreSQL每条报表SQL限制5秒，来源10000行/分组200组，超限整体拒绝。报表当前与业务共用Gate，不代表大规模数据性能已验收；不要以增加上限替代索引、EXPLAIN与负载验证。SQLite仅用于开发验证。

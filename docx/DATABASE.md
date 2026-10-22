@@ -65,3 +65,7 @@ onebot_instance 1—0..1 onebot_connection；message_inbox 1—0..1 message_deli
 迁移ce1a0b9c8d7e新增sales_shipment、shipment_line、shipment_execution。销售行shipped_quantity默认0并受0≤已发≤计划约束；订单支持partially_shipped/shipped且保留审批人约束。发货/发货行/命令记录采用追加存储，PG阻止UPDATE/DELETE/TRUNCATE，SQLite阻止UPDATE/DELETE。
 
 stock_movement新增唯一shipment_line_id外键，receipt_line_id变可空；ck_stock_movement_source要求kind与唯一业务来源配对。原正数数量检查、旧采购流水、唯一/外键/索引和不可变触发器均保留。出库历史存在时拒绝破坏性降级；无出库时可回退至be0f9a8b7c6d并保留旧采购/销售数据。SQLite重建显式保留未命名检查约束，并在事务前后检查外键。完整关系见[出库设计](SHIPMENTS.md)。
+
+## v1.0.8 只读报表
+
+复用库存余额、方向流水及采购/销售单据，没有新增业务表或列，因此无新迁移，迁移头保持ce1a0b9c8d7e。report/export是资源动作目录扩展，已发布策略快照不改动。授权与来源关联过滤后，在受限子查询上按仓库/商品/方向或状态/币种分组，保留NUMERIC精度，不跨币种/单位合计。

@@ -24,3 +24,7 @@ v1.0.5回执样例任务未得到可审查报告或候选文件，未采用任�
 
 
 v1.0.6销售金额样例：精确授权tests/fixtures/sales_amount_cases.json，隔离dry-run通过。headless返回needs_codex_review，但review实际changed为空，指定JSON检查退出69，tests_passed=false；未应用候选、未调整报告或隔离。Codex接管八例样本与真实金额校验，不计为成功委派。
+
+## v1.0.8 文档整理尝试（2026-10-22）
+
+使用dsh-delegator，为单个docx/REPORTS.md安排中文可读性整理，只有该文件可写，无密钥或业务数据上下文。dry-run验证通过；隔离执行配置timeout=90/retries=0，返回takeover_required/timeout、attempts=[]，没有可审查产物。没有自动重试或扩大隔离权限，Codex接管文档整理与验收。任务与报告保留在仓库外私有临时目录，不提交运行会话。

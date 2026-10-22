@@ -54,3 +54,7 @@ SalesView → sales_api → sales → order_support + Engine → sales_models/Po
 SalesView/ShipmentEditor → sales_api → shipment应用服务 → 当前订单/授权/库存行锁。审批只批准订单，实际发货才扣库存；发货、明细、不可变方向流水、余额、订单进度、幂等、outbox和审计同事务。当前Gate仍串行化授权与业务命令，行锁以订单/销售行/商品稳定排序，未来细化Gate前须保留真实PG争抢库存测试。
 
 已有库存读取入口兼容采购与销售两种来源，在SQL分页前分别约束对应订单、客户/供应商、商品、仓库和来源单据ID。协议/AI未新增出库工具，仍不能直接操作库存。详见[出库服务边界](SHIPMENTS.md)。
+
+## v1.0.8 只读报表服务
+
+ReportsView→reports_api→reports→既有procurement/sales查询与Engine.field_scope→数据库，复用Gate事务、会话、审计。只有白名单报表/指标/维度，SQL先授权再限规模和聚合，不加载完整订单/逐行N+1，不建立报表数据副本。CSV再走相同服务并加入export交集，无AI、队列或新表依赖。当前同步有界统计；异步导出、日期趋势与BI后续单独设计。

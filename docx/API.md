@@ -116,3 +116,9 @@
 sales_orders状态筛选新增partially_shipped/shipped；lines中shipped_quantity由新增同名虚拟字段权限控制，未授权隐藏、masked脱敏。sales_shipments的order_id筛选、id游标须相应字段可读。当前无发货编辑/删除/强制重发接口。
 
 stock_movements的quantity继续为正数：purchase_receipt增加，sales_shipment扣减，按kind和receipt_line_id/shipment_line_id唯一来源约束关联。查询在LIMIT前应用两种业务来源的权限；库存页展示类型方向，不返回未经授权的销售记录或价格。
+
+## v1.0.8 基础报表
+
+GET `/api/v1/reports/{inventory|movements|purchases|sales}` 返回items/columns/source_rows/policy_revision/scope/limits；GET同路径`/export`下载UTF-8 BOM CSV。全部读取当前会话身份。metric=count|amount（金额仅订单），库存/流水支持warehouse_id/product_id，流水另支持kind，订单支持status/currency。参数白名单、种类/长度校验，未知参数422。
+
+统计取read与report交集，导出再取export；聚合前执行业务来源范围、关联和字段约束，金额字段联动。无动作允许规则403；当前可统计行为空则200空items/仅CSV表头。来源超过10000或分组超过200整体422，超时503，不返回部分汇总。成功审计仅元数据；错误沿用统一失败审计。详见[报表说明](REPORTS.md)。

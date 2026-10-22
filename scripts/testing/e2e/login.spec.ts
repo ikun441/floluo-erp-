@@ -1309,7 +1309,9 @@ test("real reports, filters, current CSV authorization and mobile layout", async
     page.getByRole("cell", { name: "采购入库（增加）", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "采购汇总", exact: true }).click();
-  await page.getByLabel("订单指标", { exact: true }).selectOption("amount");
+  await page
+    .getByRole("combobox", { name: "订单指标", exact: true })
+    .selectOption("amount");
   await page.getByRole("button", { name: "应用筛选", exact: true }).click();
   await expect(
     page.getByRole("columnheader", { name: "订单金额", exact: true }),
