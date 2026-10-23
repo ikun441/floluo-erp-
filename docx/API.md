@@ -122,3 +122,9 @@ stock_movements的quantity继续为正数：purchase_receipt增加，sales_shipm
 GET `/api/v1/reports/{inventory|movements|purchases|sales}` 返回items/columns/source_rows/policy_revision/scope/limits；GET同路径`/export`下载UTF-8 BOM CSV。全部读取当前会话身份。metric=count|amount（金额仅订单），库存/流水支持warehouse_id/product_id，流水另支持kind，订单支持status/currency。参数白名单、种类/长度校验，未知参数422。
 
 统计取read与report交集，导出再取export；聚合前执行业务来源范围、关联和字段约束，金额字段联动。无动作允许规则403；当前可统计行为空则200空items/仅CSV表头。来源超过10000或分组超过200整体422，超时503，不返回部分汇总。成功审计仅元数据；错误沿用统一失败审计。详见[报表说明](REPORTS.md)。
+
+## v1.0.9 可选AI与受控查询
+
+新增`/api/v1/ai/status`、`/configuration`、`/requests`及请求详情/execute/cancel，完整契约见[AI说明](AI.md)。默认禁用，POST解析要求text、consent=true和Idempotency-Key；本地可识别的描述返回ai_local_available，不调用模型。配置PATCH使用version与部分values，先验证旧/新候选和字段写权限。
+
+解析返回标准结构化意图与ready/clarification/failed等状态，确认只支持库存、采购查询与销售汇总。模型网络I/O外置于短授权事务之间；完成与执行分别重查当前会话/权限/配置。execute只返回当前业务服务投影，不把结果交回模型。所有POST/PATCH仍需CSRF/Origin校验。参数验证若早于事务依赖，失败审计兜底只记录模板路径、身份和422；既有事务已记录的错误不会重复记账。

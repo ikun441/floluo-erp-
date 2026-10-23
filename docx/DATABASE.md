@@ -69,3 +69,16 @@ stock_movement新增唯一shipment_line_id外键，receipt_line_id变可空；ck
 ## v1.0.8 只读报表
 
 复用库存余额、方向流水及采购/销售单据，没有新增业务表或列，因此无新迁移，迁移头保持ce1a0b9c8d7e。report/export是资源动作目录扩展，已发布策略快照不改动。授权与来源关联过滤后，在受限子查询上按仓库/商品/方向或状态/币种分组，保留NUMERIC精度，不跨币种/单位合计。
+
+## v1.0.9 可选AI请求与配置
+
+新增独立迁移df2b1c0d9e8f，继承ce1a0b9c8d7e，不修改既有业务表。
+
+| 表 | 约束与关系 |
+| --- | --- |
+| ai_configuration | 单行id=1，version乐观锁，默认disabled、空URL/model/tools，timeout_seconds限制2至20；密钥不入库 |
+| ai_request | owner_id→erp_user、session_digest→session_token，用户/请求键唯一；config_version保存配置快照号，非历史配置外键 |
+| ai_request 状态 | parsing/failed/cancelled时intent为SQL NULL，ready/clarification时必须有校验后的JSON意图 |
+| ai_request 索引 | owner_id+created_at用于近期列表/频率，state+lease_expires_at用于进行中配额 |
+
+请求另保存参数摘要、原会话、5分钟过期时间、网络租约和受限错误码，不保存原始描述、供应商响应、API Key或查询结果。原有Gate保护初始登记和完成写回；HTTP期间没有数据库事务。已存在请求历史时拒绝破坏性降级，空请求表可显式退回ce1a0b9c8d7e；配置会随该降级删除，需先备份。PostgreSQL/SQLite均验证迁移元数据一致性。

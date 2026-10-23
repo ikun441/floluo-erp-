@@ -10,8 +10,10 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from . import __version__
+from .ai_api import register as register_ai
 from .audit import append, digest
 from .config import Settings
 from .database import lock_gate, make_engine
@@ -61,6 +63,32 @@ def create_app(settings=None):
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
+        if not getattr(request.state, "validation_audited", False):
+            # Malformed JSON and the AI endpoint may fail before a yielding DB dependency.
+            # Record only the route template, resolved identity and result, never the body.
+            def record_early_failure():
+                try:
+                    with Session(app.state.engine) as db:
+                        lock_gate(db)
+                        try:
+                            authenticated(request, db)
+                        except HTTPException:
+                            pass
+                        route = request.scope.get("route")
+                        append(
+                            db,
+                            getattr(request.state, "actor", None),
+                            request.state.trace_id,
+                            request.method + " " + getattr(route, "path", "validation"),
+                            422,
+                        )
+                        db.commit()
+                except Exception:
+                    logger.error(
+                        "failure_audit_unavailable", extra={"trace_id": request.state.trace_id}
+                    )
+
+            await run_in_threadpool(record_early_failure)
         return JSONResponse(
             status_code=422,
             content={
@@ -119,6 +147,7 @@ def create_app(settings=None):
                     422,
                 )
                 db.commit()
+                request.state.validation_audited = True
                 raise
             except IntegrityError:
                 db.rollback()
@@ -364,6 +393,7 @@ def create_app(settings=None):
     register_procurement(app, database, authorized_engine)
     register_sales(app, database, authorized_engine)
     register_reports(app, database, authorized_engine)
+    register_ai(app, database, authenticated, authorized_engine, settings)
     register_messaging(app, database, authorized_engine)
     register_message_operations(app, database, authorized_engine)
     register_intents(app, database, authorized_engine)

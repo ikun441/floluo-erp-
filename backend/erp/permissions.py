@@ -7,6 +7,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import and_, false, func, not_, or_, select, true
 from sqlalchemy.orm import Session
 
+from .ai_models import AIConfiguration, AIRequest
 from .business_models import (
     Category,
     InventoryBalance,
@@ -384,6 +385,55 @@ RESOURCES["message_deliveries"] = Resource(
     frozenset({"read"}),
     "owner_id",
 )
+
+
+RESOURCES["ai_configuration"] = Resource(
+    AIConfiguration,
+    frozenset(
+        {
+            "id",
+            "version",
+            "enabled",
+            "base_url",
+            "model",
+            "timeout_seconds",
+            "tools",
+            "allowed_base_urls",
+            "credential_configured",
+        }
+    ),
+    frozenset({"read", "update"}),
+    virtual_fields=frozenset({"tools", "allowed_base_urls", "credential_configured"}),
+)
+RESOURCES["ai_requests"] = Resource(
+    AIRequest,
+    frozenset(
+        {
+            "id",
+            "version",
+            "owner_id",
+            "config_version",
+            "state",
+            "intent",
+            "error_code",
+            "created_at",
+            "expires_at",
+        }
+    ),
+    frozenset({"read", "create", "execute", "cancel"}),
+    "owner_id",
+    virtual_fields=frozenset({"intent", "created_at", "expires_at"}),
+)
+for _name in ("inventory_balances", "purchase_orders", "sales_orders"):
+    _spec = RESOURCES[_name]
+    RESOURCES[_name] = Resource(
+        _spec.model,
+        _spec.fields,
+        _spec.actions | {"ai_query"},
+        _spec.owner_column,
+        _spec.department_column,
+        _spec.virtual_fields,
+    )
 
 
 LEVEL = {"hidden": 0, "masked": 1, "read": 2, "write": 3}

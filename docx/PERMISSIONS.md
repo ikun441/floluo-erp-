@@ -78,3 +78,11 @@ customers复用目录read/create/update；sales_orders注册read/create/update/s
 inventory_balances、stock_movements、purchase_orders、sales_orders新增report/export动作，旧策略不自动扩权。统计=read∩report，导出=read∩report∩export，各动作的范围、条件、显式拒绝、待审批和字段最严约束均在SQL聚合前应用。Engine.field_scope泛化原可读字段SQL过滤，readable_scope保持原契约。
 
 库存要求warehouse_id/product_id/quantity，流水另需kind；关联商品id/sku/name/unit、仓库id/code/name必须完整可读。订单数量要求status/currency，金额要求三项total/unit_price/line_amount均完整可读；否则该行不参与对应指标，不返回排除行数。所有筛选/分组字段在授权后使用。既有来源单据关系约束继续生效。详见[配置与统计口径](REPORTS.md)。
+
+## v1.0.9 AI授权
+
+ai_configuration支持read/update；ai_requests支持read/create/execute/cancel，具备own范围，并额外强制owner与原session_digest相等。即使策略all也不能读取或确认另一账号/会话的请求。intent是虚拟字段，不允许SQL条件；完整预览必须id/version/state/intent可读，create要求intent可写，cancel要求state可写，execute另检查该动作的预览字段可读与待审批标志。
+
+inventory_balances、purchase_orders、sales_orders增加ai_query。ToolEngine将主资源read与ai_query的行范围和字段权限取交集，显式拒绝和待审批优先；关联资料仍沿用既有Web读取约束。库存/采购最多20条，字段投影和金额联动与Web一致；销售汇总另需report，参与聚合字段必须完整可读。
+
+管理员工具开关不能授予业务权限；模型不可传主体、角色、SQL、URL或额外参数。旧策略不增加新资源/动作，需在权限中心显式授权。预览不是授权凭证，完成与执行重查当前策略/用户/会话/配置/期限。失败与工具调用审计不记录原文、模型正文、数据单元格或密钥。详见[配置顺序与API](AI.md)。

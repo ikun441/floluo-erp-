@@ -1,5 +1,7 @@
 "use client";
 import { useState, type FormEvent } from "react";
+import AIAssistantView from "./components/AIAssistantView";
+import AIConfigurationView from "./components/AIConfigurationView";
 import ReportsView from "./components/ReportsView";
 import SalesView from "./components/SalesView";
 import OperationsView from "./components/OperationsView";
@@ -131,6 +133,25 @@ const names: Record<string, string> = {
   parent_id: "上级 ID",
 };
 const errorMessages: Record<string, string> = {
+  ai_disabled: "AI 当前未启用，可继续使用离线指令或业务页面",
+  ai_endpoint_denied: "模型地址不在部署允许范围内，请联系管理员",
+  ai_configuration_incomplete: "启用前请填写模型、服务地址并选择查询工具",
+  ai_configuration_changed: "AI 配置已变化，请重新生成预览",
+  ai_preview_denied: "当前权限不能完整读取或确认此解析预览",
+  ai_request_not_ready: "请求尚不可查询，请检查状态或重新描述",
+  ai_request_in_progress: "原请求仍在理解中，请稍后刷新请求列表",
+  ai_request_expired: "预览已过期，请重新描述",
+  ai_parse_expired: "模型解析已超时，请重新发起",
+  ai_request_cancelled: "请求已取消，未执行查询",
+  ai_tool_denied: "当前账号没有对应工具的读取或 ai_query 权限",
+  ai_tool_disabled: "管理员未启用此查询工具",
+  ai_local_available: "此描述可由离线规则识别，请使用离线助手处理",
+  ai_rate_limited: "解析请求过于频繁或已有请求处理中，请稍后重试",
+  ai_timeout: "模型响应超时，未执行业务查询",
+  ai_unavailable: "模型服务暂不可用，离线业务仍可使用",
+  ai_response_invalid: "模型返回内容未通过校验，未执行业务查询",
+  ai_response_too_large: "模型响应超过大小限制，未执行业务查询",
+
   report_permission_denied: "当前账号缺少报表读取、统计或导出权限",
   report_source_limit: "合格记录超过 10000 条，请缩小筛选范围",
   report_group_limit: "汇总超过 200 组，请缩小筛选范围",
@@ -973,6 +994,8 @@ function Workspace() {
     { key: "customers", label: "客户资料", icon: Building2 },
     { key: "stock", label: "库存与出入库", icon: Box },
     { key: "reports", label: "分析与报表", icon: LayoutDashboard },
+    { key: "ai", label: "AI 助手", icon: ShieldCheck },
+    { key: "ai-configuration", label: "AI 服务配置", icon: ShieldCheck },
     { key: "operations", label: "操作工作台", icon: ShieldCheck },
     { key: "messaging", label: "消息接入", icon: Users },
     { key: "configuration", label: "业务规则配置", icon: ShieldCheck },
@@ -1037,7 +1060,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.8 · 开发版</small>
+            统一授权，安心协作<small>v1.0.9 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -1081,6 +1104,13 @@ function Workspace() {
             <StockView api={api} />
           ) : page === "reports" ? (
             <ReportsView api={api} />
+          ) : page === "ai" ? (
+            <AIAssistantView
+              api={api}
+              openOperations={() => setPage("operations")}
+            />
+          ) : page === "ai-configuration" ? (
+            <AIConfigurationView api={api} />
           ) : page === "operations" ? (
             <OperationsView api={api} />
           ) : page === "messaging" ? (

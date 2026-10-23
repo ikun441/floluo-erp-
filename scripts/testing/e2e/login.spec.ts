@@ -1383,3 +1383,232 @@ test("real reports, filters, current CSV authorization and mobile layout", async
     page.getByText("当前筛选与授权范围内没有合格记录。", { exact: true }),
   ).toBeVisible();
 });
+
+test("optional AI configuration consent preview real gateway and offline fallback", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  let csrf =
+    (await page.context().cookies()).find(
+      (cookie) => cookie.name === "erp_csrf",
+    )?.value ?? "";
+  const original = await (await page.request.get("/api/v1/auth/me")).json();
+  const admin = await (
+    await page.request.get("/api/v1/users/" + original.id)
+  ).json();
+  const suffix = Date.now().toString();
+  const username = "ai_browser_" + suffix;
+  const password = "AI-browser-fixture-" + "x".repeat(20);
+  expect(
+    (
+      await page.request.post("/api/v1/users", {
+        headers: { "X-CSRF-Token": csrf },
+        data: { data: { username, password, role_ids: admin.role_ids } },
+      })
+    ).status(),
+  ).toBe(200);
+  await page.getByRole("button", { name: "退出登录", exact: true }).click();
+  await login(page, username, password);
+  csrf =
+    (await page.context().cookies()).find(
+      (cookie) => cookie.name === "erp_csrf",
+    )?.value ?? "";
+  const headers = { "X-CSRF-Token": csrf };
+  const me = await (await page.request.get("/api/v1/auth/me")).json();
+  async function command(resource: string, data: unknown, key?: string) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers: { ...headers, ...(key ? { "Idempotency-Key": key } : {}) },
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  const product = await command("products", {
+    data: {
+      sku: "ai-" + suffix,
+      name: "AI验证商品 " + suffix,
+      unit: "piece",
+      owner_id: me.id,
+    },
+  });
+  const warehouse = await command("warehouses", {
+    data: {
+      code: "ai-" + suffix,
+      name: "AI验证仓库 " + suffix,
+      owner_id: me.id,
+    },
+  });
+  const supplier = await command("suppliers", {
+    data: {
+      code: "ai-" + suffix,
+      name: "AI验证供应商 " + suffix,
+      owner_id: me.id,
+    },
+  });
+  const business = await (
+    await page.request.get("/api/v1/system_configuration")
+  ).json();
+  expect(
+    (
+      await page.request.patch("/api/v1/system_configuration", {
+        headers,
+        data: {
+          version: business.version,
+          values: {
+            supported_currencies: ["CNY"],
+            tax_mode: "no_tax",
+            require_separate_approver: false,
+          },
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  let purchase = await command("purchase_orders", {
+    supplier_id: supplier.id,
+    currency: "CNY",
+    note: "",
+    lines: [{ product_id: product.id, quantity: "9", unit_price: "2.00" }],
+  });
+  purchase = await command("purchase_orders/" + purchase.id + "/submit", {
+    version: purchase.version,
+  });
+  purchase = await command("purchase_orders/" + purchase.id + "/approve", {
+    version: purchase.version,
+  });
+  await command(
+    "purchase_orders/" + purchase.id + "/receive",
+    {
+      version: purchase.version,
+      warehouse_id: warehouse.id,
+      lines: [{ line_id: purchase.lines[0].id, quantity: "9" }],
+    },
+    "ai-stock-" + suffix,
+  );
+  const deployment = await (
+    await page.request.get("/api/v1/ai/configuration")
+  ).json();
+  expect(deployment.enabled).toBe(false);
+  expect(deployment.credential_configured).toBe(false);
+  await page.getByRole("button", { name: "AI 服务配置", exact: true }).click();
+  await page
+    .getByRole("checkbox", { name: "启用可选 AI 服务", exact: true })
+    .check();
+  await page
+    .getByRole("combobox", { name: "模型服务地址", exact: true })
+    .selectOption(deployment.allowed_base_urls[0]);
+  await page
+    .getByRole("textbox", { name: "模型名称", exact: true })
+    .fill("fixture-model");
+  await page.getByRole("checkbox", { name: "库存查询", exact: true }).check();
+  await page.getByRole("button", { name: "保存 AI 配置", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("AI 配置已保存。");
+  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "业务描述", exact: true })
+    .fill("请帮我看看AI验证商品还能不能支持接下来的需求");
+  await page
+    .getByRole("button", { name: "先用离线规则理解", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "离线规则暂未识别", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "同意并使用 AI 理解", exact: true }),
+  ).toBeDisabled();
+  expect(
+    (await (await page.request.get("/api/v1/ai/requests")).json()).items,
+  ).toHaveLength(0);
+  await page
+    .getByRole("checkbox", {
+      name: "我同意将本次描述发送至企业配置的模型服务",
+      exact: true,
+    })
+    .check();
+  const parsed = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/ai/requests") &&
+      response.request().method() === "POST",
+  );
+  await page
+    .getByRole("button", { name: "同意并使用 AI 理解", exact: true })
+    .click();
+  const response = await parsed;
+  expect(response.status()).toBe(200);
+  const row = await response.json();
+  expect(row.state).toBe("ready");
+  await expect(
+    page.getByRole("region", { name: "助手查询结果", exact: true }),
+  ).not.toBeVisible();
+  const executed = page.waitForResponse((result) =>
+    result.url().endsWith("/ai/requests/" + row.id + "/execute"),
+  );
+  await page
+    .getByRole("button", { name: "按当前权限确认查询", exact: true })
+    .click();
+  expect((await executed).status()).toBe(200);
+  await expect(
+    page.getByRole("cell", { name: "9.0000", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: path.join(root, "output/playwright/ai-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/ai-mobile.png"),
+    fullPage: true,
+  });
+  const revision = await (await page.request.get("/api/v1/policies")).json();
+  await command("policies/publish", {
+    expected_revision: revision.number,
+    rules: [
+      ...revision.rules,
+      {
+        id: "ai-browser-deny-" + suffix,
+        subject: { kind: "user", id: me.id },
+        resource: "inventory_balances",
+        actions: ["ai_query"],
+        effect: "deny",
+        scope: "all",
+        fields: {},
+      },
+    ],
+  });
+  await page.getByRole("button", { name: "重新查询", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "9.0000", exact: true }),
+  ).not.toBeVisible();
+  await expect(
+    page.getByText("当前授权范围内没有可显示的记录。", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "取消此请求", exact: true }).click();
+  await expect(
+    page.getByRole("region", { name: "助手查询结果", exact: true }),
+  ).not.toBeVisible();
+  await page.getByRole("button", { name: "AI 服务配置", exact: true }).click();
+  await page
+    .getByRole("checkbox", { name: "启用可选 AI 服务", exact: true })
+    .uncheck();
+  await page.getByRole("button", { name: "保存 AI 配置", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("AI 配置已保存。");
+  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "业务描述", exact: true })
+    .fill("查询一下AI验证商品还有多少库存。");
+  await page
+    .getByRole("button", { name: "先用离线规则理解", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "离线规则已识别", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "确认离线查询", exact: true }).click();
+  await expect(
+    page.getByRole("cell", { name: "9.0000", exact: true }),
+  ).toBeVisible();
+});

@@ -7,6 +7,8 @@ x-backend: &backend
     DATABASE_URL: postgresql+psycopg://floluo:${POSTGRES_PASSWORD:?Generate .env first}@postgres:5432/floluo
     APP_ORIGIN: ${APP_ORIGIN:?Set browser origin}
     SECURE_COOKIES: ${SECURE_COOKIES:-true}
+    AI_ALLOWED_BASE_URLS: ${AI_ALLOWED_BASE_URLS:-[]}
+    AI_API_KEY: ${AI_API_KEY:-}
 services:
   postgres:
     image: postgres:17-alpine

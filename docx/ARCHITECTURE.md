@@ -58,3 +58,11 @@ SalesView/ShipmentEditor → sales_api → shipment应用服务 → 当前订单
 ## v1.0.8 只读报表服务
 
 ReportsView→reports_api→reports→既有procurement/sales查询与Engine.field_scope→数据库，复用Gate事务、会话、审计。只有白名单报表/指标/维度，SQL先授权再限规模和聚合，不加载完整订单/逐行N+1，不建立报表数据副本。CSV再走相同服务并加入export交集，无AI、队列或新表依赖。当前同步有界统计；异步导出、日期趋势与BI后续单独设计。
+
+## v1.0.9 AI边界与事务
+
+AIAssistantView/AIConfigurationView→ai_api→ai_service→ai_client或ai_gateway→原message_service/reports→统一Engine/SQL。ai_client只接触本次输入、静态格式与部署凭据，不接触Session或业务模型；ai_gateway只接受严格白名单AIIntent和服务端当前主体。
+
+模型解析采用“短事务登记/授权并提交→无DB事务的有界HTTP→短事务重新认证/授权并保存”流程，网络期间不占Gate。全企业2个/每用户1个进行中配额与每分钟5次计数来自同一数据库，幂等键避免响应丢失后再次调用模型。取消、租约过期、会话撤销、配置变化与权限变更均禁止旧调用完成或执行。
+
+只读工具结果直接展示在ERP，重复确认重新查询；模型不会接收业务记录或结果总结。本版不引入模型必需的Celery/Redis/云服务。AI写入、多轮补充和消息平台AI接入后续单独实现。

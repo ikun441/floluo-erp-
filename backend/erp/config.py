@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,3 +8,6 @@ class Settings(BaseSettings):
     app_origin: str = "https://erp.local"
     secure_cookies: bool = True
     session_minutes: int = 30
+
+    ai_allowed_base_urls: list[str] = []
+    ai_api_key: SecretStr | None = None
