@@ -57,3 +57,17 @@ class AIRequest(Row, Base):
     error_code: Mapped[str | None] = mapped_column(String(60))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class AIHandoff(Base):
+    """One explicit human transfer per source request; business confirmation stays separate."""
+
+    __tablename__ = "ai_handoff"
+    __table_args__ = (
+        UniqueConstraint("operation_id", name="uq_ai_handoff_operation"),
+        CheckConstraint("source_version >= 1", name="ck_ai_handoff_version"),
+    )
+    request_id: Mapped[str] = mapped_column(ForeignKey("ai_request.id"), primary_key=True)
+    operation_id: Mapped[str] = mapped_column(ForeignKey("message_operation.id"))
+    source_version: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

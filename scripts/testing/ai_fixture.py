@@ -23,6 +23,12 @@ def start():
                 "confidence": 0.95,
                 "parser_source": "ai",
             }
+            if "采购参数联调" in payload["messages"][1]["content"]:
+                intent.update(
+                    operation="create",
+                    resource="purchase_orders",
+                    arguments={"quantity": "3", "unit_price": "10.00"},
+                )
             assert payload["response_format"] == {"type": "json_object"}
             response = json.dumps(
                 {

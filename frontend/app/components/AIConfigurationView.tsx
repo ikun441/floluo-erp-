@@ -14,6 +14,7 @@ type Configuration = {
   credential_configured?: boolean;
 };
 const tools = {
+  prepare_purchase_draft: "采购草稿参数预览（须人工移交与密码确认）",
   query_inventory: "库存查询",
   query_purchase_orders: "采购订单查询",
   query_sales_summary: "销售汇总",
@@ -110,7 +111,7 @@ function Editor({
         />
       </label>
       <fieldset>
-        <legend>允许 AI 使用的查询工具</legend>
+        <legend>允许 AI 使用的工具</legend>
         {Object.entries(tools).map(([key, name]) => (
           <label className="ai-check" key={key}>
             <input
@@ -130,7 +131,8 @@ function Editor({
       </fieldset>
       <p className="muted">
         工具开关限定 AI 的能力范围，用户仍需对应的数据读取与 ai_query
-        权限；销售汇总还需 report。修改配置后，旧解析预览需要重新生成。
+        权限；销售汇总还需 report。采购移交另需 ai_prepare、AI 请求 prepare
+        和操作工作台权限，不能自动创建订单。修改配置后，旧解析预览需要重新生成。
       </p>
       <p className="muted">
         API 密钥：
@@ -181,7 +183,7 @@ export default function AIConfigurationView({ api }: { api: Api }) {
         </div>
       </div>
       <section className="panel padded">
-        <h2>模型与查询工具</h2>
+        <h2>模型与业务工具</h2>
         {saved && <p role="status">AI 配置已保存。</p>}
         {query.error && (
           <p className="error" role="alert">

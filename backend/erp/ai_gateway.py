@@ -11,9 +11,10 @@ from .permissions import LEVEL, Engine
 
 
 class ToolEngine(Engine):
-    """Intersect one tool's read authority without altering its related-resource read scopes."""
+    """Intersect a capability with one action; related-resource scopes retain ordinary authority."""
 
-    def __init__(self, engine, resource):
+    def __init__(self, engine, resource, action="read", capability="ai_query"):
+        self.action, self.capability = action, capability
         self.base, self.resource = engine, resource
         self.db, self.who, self.rules, self.revision = (
             engine.db,
@@ -24,22 +25,22 @@ class ToolEngine(Engine):
 
     def applicable(self, resource, action):
         rules = self.base.applicable(resource, action)
-        if resource == self.resource and action == "read":
-            rules = rules + self.base.applicable(resource, "ai_query")
+        if resource == self.resource and action == self.action:
+            rules = rules + self.base.applicable(resource, self.capability)
         return rules
 
     def scope(self, resource, action):
-        if resource == self.resource and action == "read":
-            return self.base.scope(resource, "read") & self.base.field_scope(
-                resource, set(), "ai_query"
+        if resource == self.resource and action == self.action:
+            return self.base.scope(resource, self.action) & self.base.field_scope(
+                resource, set(), self.capability
             )
         return self.base.scope(resource, action)
 
     def authorize(self, resource, action, data):
         decision = self.base.authorize(resource, action, data)
-        if resource != self.resource or action != "read":
+        if resource != self.resource or action != self.action:
             return decision
-        ai = self.base.authorize(resource, "ai_query", data)
+        ai = self.base.authorize(resource, self.capability, data)
         allowed = decision["allowed"] and ai["allowed"]
         return {
             **decision,

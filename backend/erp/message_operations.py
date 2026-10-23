@@ -1,7 +1,6 @@
 """Persistent previews; only explicit password-confirmed Web calls execute a purchase draft."""
 
 import json
-import shlex
 from datetime import timedelta
 
 from fastapi import HTTPException
@@ -10,7 +9,7 @@ from sqlalchemy import func, or_, select
 from . import procurement
 from .audit import append, change_summary, digest
 from .business_schemas import OrderInput
-from .intent import parse_fixed_command
+from .intent import normalize_purchase_values
 from .message_models import MessageBinding, MessageOperation, OneBotInstance
 from .message_service import utc
 from .models import now, uid
@@ -18,32 +17,13 @@ from .permissions import LEVEL, RESOURCES
 from .services import data_for, require
 
 PENDING = {"collecting_missing", "awaiting_confirmation"}
-KEYS = {
-    "product": "商品",
-    "supplier": "供应商",
-    "quantity": "数量",
-    "unit_price": "单价",
-    "currency": "币种",
-    "unit": "单位",
-}
 
 
 def normalize(values):
-    if not isinstance(values, dict) or not set(values) <= KEYS.keys():
-        raise HTTPException(422, "invalid_operation_values")
-    if any(not isinstance(v, str) or not v.strip() or len(v) > 160 for v in values.values()):
-        raise HTTPException(422, "invalid_operation_values")
-    values = {k: v.strip() for k, v in values.items()}
-    if "currency" in values and (
-        not values["currency"].isascii() or not values["currency"].isupper()
-    ):
-        raise HTTPException(422, "invalid_operation_values")
-    parsed = parse_fixed_command(
-        shlex.join(["/erp", "采购", "新增", *[KEYS[k] + "=" + v for k, v in values.items()]])
-    )
-    if parsed.intent is None:
-        raise HTTPException(422, "invalid_operation_values")
-    return values, list(parsed.missing)
+    try:
+        return normalize_purchase_values(values)
+    except ValueError:
+        raise HTTPException(422, "invalid_operation_values") from None
 
 
 def metadata(row):

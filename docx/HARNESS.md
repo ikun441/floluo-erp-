@@ -16,15 +16,16 @@ v1.0.3 message UI: an isolated exact-file task timed out at300 seconds; report r
 
 v1.0.4 OperationsView: an exact-file isolated task timed out at240 seconds and no candidate existed. Codex took over implementation, with no automatic retry or relaxed sandbox. The task was not counted as successful delegation. Core migration, preview/confirmation authorization and transactions remained with Codex.
 
-
 离线规则样例任务：2026-10-21，精确授权tests/fixtures/local_intent_cases.json，180秒超时，两个上游200响应，无候选文件。未应用任何DSH产物，也未放宽沙箱或重试；Codex接管有边界的样例与可信回归测试。此任务不计为成功委派。
 
-
 v1.0.5回执样例任务未得到可审查报告或候选文件，未采用任何产物，不计为成功委派；没有放宽隔离。最终回执、连接、并发和权限测试由Codex实现并真实运行。
-
 
 v1.0.6销售金额样例：精确授权tests/fixtures/sales_amount_cases.json，隔离dry-run通过。headless返回needs_codex_review，但review实际changed为空，指定JSON检查退出69，tests_passed=false；未应用候选、未调整报告或隔离。Codex接管八例样本与真实金额校验，不计为成功委派。
 
 ## v1.0.8 文档整理尝试（2026-10-22）
 
 使用dsh-delegator，为单个docx/REPORTS.md安排中文可读性整理，只有该文件可写，无密钥或业务数据上下文。dry-run验证通过；隔离执行配置timeout=90/retries=0，返回takeover_required/timeout、attempts=[]，没有可审查产物。没有自动重试或扩大隔离权限，Codex接管文档整理与验收。任务与报告保留在仓库外私有临时目录，不提交运行会话。
+
+## v1.0.10 AI使用说明尝试（2026-10-23）
+
+限定docx/AI_WORKFLOW.md，安全上下文仅旧AI说明，timeout=120/retries=0；dry-run通过，三个上游HTTP200，headless返回needs_codex_review。可信review生成空patch（changed=[]），指定文件存在性检查退出71、tests_passed=false，没有集成任何候选。未放宽隔离或自动重试，由Codex接管使用说明，核心实现和最终测试仍由Codex负责。此轮不计成功委派。

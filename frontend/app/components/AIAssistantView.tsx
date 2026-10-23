@@ -8,6 +8,7 @@ type Intent = {
   operation: "query" | "create";
   resource: string;
   arguments: Record<string, string>;
+  references?: Record<string, string>;
   confidence: number;
   parser_source: string;
 };
@@ -18,11 +19,12 @@ type RequestRow = {
   intent?: Intent | "***" | null;
   expires_at?: string;
   error_code?: string;
+  operation_id?: string;
 };
 const states: Record<string, string> = {
   parsing: "正在理解",
-  ready: "等待确认查询",
-  clarification: "需要重新描述",
+  ready: "等待人工确认",
+  clarification: "需要补充信息",
   failed: "理解失败",
   cancelled: "已取消",
 };
@@ -32,6 +34,10 @@ const resources: Record<string, string> = {
   sales_summary: "销售汇总",
 };
 const names: Record<string, string> = {
+  product: "商品",
+  supplier: "供应商",
+  unit: "单位",
+  unit_price: "单价",
   query: "商品名称",
   number: "订单号",
   metric: "指标",
@@ -185,23 +191,176 @@ function Preview({ intent }: { intent: Intent }) {
       <dd>{resources[intent.resource] ?? intent.resource}</dd>
       <dt>操作</dt>
       <dd>{intent.operation === "query" ? "查询" : "创建待确认请求"}</dd>
-      {Object.entries(intent.arguments).map(([key, value]) => (
-        <div className="ai-preview-row" key={key}>
-          <dt>{names[key] ?? key}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
+      {Object.entries({ ...intent.arguments, ...intent.references }).map(
+        ([key, value]) => (
+          <div className="ai-preview-row" key={key}>
+            <dt>{names[key] ?? key}</dt>
+            <dd>{value}</dd>
+          </div>
+        ),
+      )}
       <dt>识别来源</dt>
       <dd>{intent.parser_source === "ai" ? "AI 辅助理解" : "离线规则"}</dd>
     </dl>
   );
 }
+const purchaseFields = [
+  "product",
+  "supplier",
+  "quantity",
+  "unit_price",
+  "currency",
+  "unit",
+] as const;
+function PurchaseIntent({
+  api,
+  row,
+  intent,
+  openOperations,
+}: {
+  api: Api;
+  row: RequestRow;
+  intent: Intent;
+  openOperations: (id?: string) => void;
+}) {
+  const client = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const current = { ...intent.arguments, ...intent.references };
+  const missing = purchaseFields.filter(
+    (key) => key !== "unit" && !current[key],
+  );
+  const linked =
+    typeof row.operation_id === "string" && row.operation_id !== "***"
+      ? row.operation_id
+      : undefined;
+  async function supplement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const form = new FormData(event.currentTarget);
+    const values = Object.fromEntries(
+      purchaseFields.flatMap((key) => {
+        const value = String(form.get(key) ?? "").trim();
+        return value ? [[key, value]] : [];
+      }),
+    );
+    setBusy(true);
+    setError(undefined);
+    try {
+      await api("/ai/requests/" + row.id, {
+        method: "PATCH",
+        body: JSON.stringify({ version: row.version, values }),
+      });
+      await client.invalidateQueries({ queryKey: ["ai"] });
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "补充失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function transfer() {
+    if (busy) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const result = (await api("/ai/requests/" + row.id + "/prepare", {
+        method: "POST",
+        body: JSON.stringify({ version: row.version }),
+      })) as { operation: { id?: string } };
+      await client.invalidateQueries({ queryKey: ["ai"] });
+      if (result.operation.id && result.operation.id !== "***")
+        openOperations(result.operation.id);
+    } catch (failure) {
+      setError(
+        failure instanceof Error
+          ? failure.message
+          : "结果未知，可刷新预览后查看是否已移交。",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="ai-purchase">
+      <h3>采购参数补全</h3>
+      <p className="ai-help">
+        补充信息只在 ERP
+        内处理，不再次发送给模型。币种和供应商须明确提供；单位不会自动换算。移交只创建待确认请求，输入当前密码确认后才创建采购草稿。
+      </p>
+      {intent.confidence < 0.8 ? (
+        <p className="notice">
+          模型把握不足，请重新描述采购目标。补充表单不会提升模型置信度。
+        </p>
+      ) : linked ? (
+        <div className="notice">
+          <p>已移交操作工作台；后续修改、取消与密码确认在那里完成。</p>
+          <button onClick={() => openOperations(linked)}>
+            打开待确认采购请求
+          </button>
+        </div>
+      ) : (
+        <>
+          {missing.length > 0 && (
+            <p className="notice">
+              还需补充：{missing.map((key) => names[key]).join("、")}
+            </p>
+          )}
+          <form
+            className="business-form"
+            aria-label="补充 AI 采购参数"
+            onSubmit={supplement}
+          >
+            {purchaseFields.map((key) => (
+              <label key={key}>
+                {names[key]}
+                {key === "unit" ? "（可选）" : ""}
+                <input
+                  name={key}
+                  defaultValue={current[key] ?? ""}
+                  maxLength={key === "unit" ? 30 : key === "currency" ? 3 : 160}
+                  inputMode={
+                    key === "quantity" || key === "unit_price"
+                      ? "decimal"
+                      : "text"
+                  }
+                  placeholder={
+                    key === "product" || key === "supplier"
+                      ? "填写精确名称、编码或 ID"
+                      : key === "currency"
+                        ? "如 CNY，请明确填写"
+                        : "填写要补充或修正的值"
+                  }
+                />
+              </label>
+            ))}
+            <button disabled={busy}>保存补充并重新预览</button>
+          </form>
+          {row.state === "ready" && (
+            <button
+              className="primary"
+              disabled={busy}
+              onClick={() => void transfer()}
+            >
+              确认参数并移交操作工作台
+            </button>
+          )}
+        </>
+      )}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AIAssistantView({
   api,
   openOperations,
 }: {
   api: Api;
-  openOperations: () => void;
+  openOperations: (id?: string) => void;
 }) {
   const client = useQueryClient();
   const [text, setText] = useState("");
@@ -318,7 +477,9 @@ export default function AIAssistantView({
         <div>
           <p className="eyebrow">ASSISTED WORKSPACE</p>
           <h1>AI 助手</h1>
-          <p className="muted">先离线理解，再按需借助 AI；每次查询由你确认。</p>
+          <p className="muted">
+            先离线理解，再按需借助 AI；查询和采购预览均由你确认。
+          </p>
         </div>
         <Sparkles size={29} aria-hidden="true" />
       </div>
@@ -361,7 +522,9 @@ export default function AIAssistantView({
                 确认离线查询
               </button>
             ) : (
-              <button onClick={openOperations}>前往操作工作台完善请求</button>
+              <button onClick={() => openOperations()}>
+                前往操作工作台完善请求
+              </button>
             )}
           </div>
         )}
@@ -426,11 +589,21 @@ export default function AIAssistantView({
             <>
               <p>{states[row.state ?? ""] ?? "状态不可见"}</p>
               {preview && <Preview intent={preview} />}
-              {row.state === "clarification" && (
-                <p className="muted">
-                  模型把握不足，请补充商品名称、单号或查询目标后重新描述。
-                </p>
+              {preview?.operation === "create" && token && (
+                <PurchaseIntent
+                  key={token}
+                  api={api}
+                  row={row}
+                  intent={preview}
+                  openOperations={openOperations}
+                />
               )}
+              {row.state === "clarification" &&
+                preview?.operation !== "create" && (
+                  <p className="muted">
+                    模型把握不足，请补充商品名称、单号或查询目标后重新描述。
+                  </p>
+                )}
               {row.state === "failed" && (
                 <p className="error" role="alert">
                   模型理解失败，请检查服务或重新描述。
@@ -446,28 +619,33 @@ export default function AIAssistantView({
                       })}
                 </p>
               )}
-              {row.state === "ready" && preview && token && (
-                <button
-                  className="primary"
-                  onClick={() => setConfirmed(token)}
-                  disabled={confirmed === token}
-                >
-                  按当前权限确认查询
-                </button>
-              )}
+              {row.state === "ready" &&
+                preview?.operation === "query" &&
+                token && (
+                  <button
+                    className="primary"
+                    onClick={() => setConfirmed(token)}
+                    disabled={confirmed === token}
+                  >
+                    按当前权限确认查询
+                  </button>
+                )}
             </>
           ) : null}
         </section>
       )}
-      {row?.state === "ready" && preview && token && confirmed === token && (
-        <Result
-          key={token}
-          api={api}
-          path={"/ai/requests/" + row.id + "/execute"}
-          body={{ version: row.version }}
-          identity={token}
-        />
-      )}
+      {row?.state === "ready" &&
+        preview?.operation === "query" &&
+        token &&
+        confirmed === token && (
+          <Result
+            key={token}
+            api={api}
+            path={"/ai/requests/" + row.id + "/execute"}
+            body={{ version: row.version }}
+            identity={token}
+          />
+        )}
       <section className="panel">
         <div className="panel-heading">
           <h2>本次会话的解析请求</h2>
@@ -511,6 +689,7 @@ export default function AIAssistantView({
                     </button>
                   )}
                   {valid(item) &&
+                    !item.operation_id &&
                     ["parsing", "ready", "clarification"].includes(
                       item.state ?? "",
                     ) && (

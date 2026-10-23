@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from . import ai_service as service
 from .ai_client import ModelFailure, infer
 from .ai_models import AIConfiguration, AIRequest
-from .ai_schemas import ConfigurationUpdate, ParseInput, RequestVersion
+from .ai_schemas import ConfigurationUpdate, ParseInput, RequestVersion, SupplementInput
 from .audit import change_summary
 from .permissions import Engine, subject
 from .services import require
@@ -125,6 +125,43 @@ def register(app, database, authenticated, authorized_engine, settings):
             request.state.audit_details.update({"request_id": record_id, "error_code": error})
         if error:
             raise HTTPException(code, error)
+        return result
+
+    @app.patch("/api/v1/ai/requests/{record_id}")
+    def supplement(
+        record_id: str,
+        request: Request,
+        body: SupplementInput,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
+        row = service.owned_request(db, engine, request.state.token, record_id, "update")
+        result = service.supplement(db, engine, row, body.version, body.values, settings)
+        request.state.audit_details = {
+            "component": "ai",
+            "phase": "supplement",
+            "request_id": row.id,
+            "fields": sorted(body.values),
+        }
+        return result
+
+    @app.post("/api/v1/ai/requests/{record_id}/prepare")
+    def prepare(
+        record_id: str,
+        request: Request,
+        body: RequestVersion,
+        engine: Engine = Depends(authorized_engine),
+        db: Session = Depends(database, scope="function"),
+    ):
+        row = service.owned_request(db, engine, request.state.token, record_id, "prepare")
+        result = service.handoff(db, engine, row, body.version, settings)
+        request.state.audit_details = {
+            "component": "ai",
+            "phase": "handoff",
+            "request_id": row.id,
+            "operation_id": result["operation"]["id"],
+            "policy_revision": engine.revision,
+        }
         return result
 
     @app.post("/api/v1/ai/requests/{record_id}/execute")

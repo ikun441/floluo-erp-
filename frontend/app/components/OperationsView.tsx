@@ -104,11 +104,17 @@ function Inputs({ api }: { api: Api }) {
     </>
   );
 }
-export default function OperationsView({ api }: { api: Api }) {
+export default function OperationsView({
+  api,
+  initialSelected,
+}: {
+  api: Api;
+  initialSelected?: string;
+}) {
   const qc = useQueryClient();
   const [state, setState] = useState("");
   const [after, setAfter] = useState("");
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string | undefined>(initialSelected);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();

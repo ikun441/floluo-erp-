@@ -42,18 +42,15 @@ OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实
 
 会话过期由访问时检查推进，不依赖Celery/Redis；保留历史以支持重放与审计，目前没有自动清理后台。版本更新日志主文件为docx/version.md，保留文件名与Markdown格式。
 
-
 ## v1.0.5 升级与恢复
 
 备份后先停止旧后端，再执行`alembic upgrade head`（新增ad9e8f7a6b5c），最后启动新版本；禁止混跑旧版无租约发送器与新版发送器。已有收件箱不补发，新历史存在时迁移拒绝破坏性降级。旧角色需在权限中心显式添加onebot_connections/message_deliveries.read及所需字段/数据范围；不自动扩大权限。
 
 不增加Redis/Celery依赖，当前Universal连接负责有界发送轮询。正常断线释放租约；异常退出后最多等待90秒失效，再由OneBot客户端重连接续未过期任务。最多3次、5分钟，失败/过期在监控查看，不提供绕权强制补发。真实QQ、多进程与Linux容器生产部署仍待验收，保留/备份/清理策略需另行落实。
 
-
 ## v1.0.6 升级补充
 
 先备份数据库，停止旧后端并执行`alembic upgrade head`至be0f9a8b7c6d，再启动新版本。新迁移只添加客户/销售表，保留既有数据/策略。已有管理员在权限中心明确授权customers和sales_orders字段、动作与范围；原角色不会自动获得权限。首次使用销售前在「业务规则配置」明确币种/no_tax，创建人与审批人须不同。新表已有历史时不能用downgrade删除，应恢复已验证备份或向前修复。销售出库尚未交付。
-
 
 ## v1.0.7 出库迁移与授权
 
@@ -76,3 +73,7 @@ OneBot客户端使用反向Universal连接 `wss://<ERP地址>/onebot/v11/ws/<实
 管理员随后在Web「AI 服务配置」选择允许地址、模型名称、2至20秒超时和工具，再启用。普通用户需ai_requests相应动作、主资源ai_query与read；销售汇总还需report。旧策略不自动扩权。保存配置会令旧解析版本不能确认，须重新理解。
 
 本版用回环HTTP测试服务验证协议、超时、拒绝和真实业务查询，没有配置生产供应商或调用付费模型；上线前需验证所选服务支持chat/completions及JSON格式参数、TLS/网络出口、密钥管理与文本保留政策。HTTP应限可信内网，公开网络优先HTTPS。生产Linux/Compose启动与备份恢复仍未验收。
+
+## v1.0.10 升级
+
+先备份、停止旧后端，执行alembic upgrade head到e03c2d1e0f9a，再启动新程序。新增仅ai_handoff表；不修改旧权限快照。显式授予ai_requests的update/prepare及intent可写、operation_id可读，purchase_orders的ai_prepare/create/read，必要资料读取与message_operations权限；Web启用prepare_purchase_draft工具。已有AI请求时拒绝降级；先备份再选择兼容回退方案。AI默认关闭，普通业务启动不需要模型。

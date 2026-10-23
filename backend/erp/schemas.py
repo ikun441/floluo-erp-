@@ -42,7 +42,7 @@ class Rule(Strict):
     subject: SubjectRule
     effect: Literal["allow", "deny"]
     resource: str
-    actions: list[str] = Field(min_length=1, max_length=10)
+    actions: list[str] = Field(min_length=1, max_length=32)
     scope: Literal["own", "department", "departments", "records", "all"] = "own"
     scope_ids: list[str] = Field(default_factory=list, max_length=100)
     fields: dict[str, Literal["hidden", "masked", "read", "write"]] = Field(default_factory=dict)

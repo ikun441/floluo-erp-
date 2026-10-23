@@ -133,9 +133,13 @@ const names: Record<string, string> = {
   parent_id: "上级 ID",
 };
 const errorMessages: Record<string, string> = {
+  ai_request_transferred: "已移交操作工作台，请在那里修改、取消或确认请求",
+  ai_write_preview_required: "采购意图须先移交操作工作台，不能通过查询接口执行",
+  ai_confidence_low: "模型把握不足，请重新描述采购目标",
+  ai_supplement_limit: "补充次数已达上限，请重新发起请求",
   ai_disabled: "AI 当前未启用，可继续使用离线指令或业务页面",
   ai_endpoint_denied: "模型地址不在部署允许范围内，请联系管理员",
-  ai_configuration_incomplete: "启用前请填写模型、服务地址并选择查询工具",
+  ai_configuration_incomplete: "启用前请填写模型、服务地址并选择业务工具",
   ai_configuration_changed: "AI 配置已变化，请重新生成预览",
   ai_preview_denied: "当前权限不能完整读取或确认此解析预览",
   ai_request_not_ready: "请求尚不可查询，请检查状态或重新描述",
@@ -144,7 +148,7 @@ const errorMessages: Record<string, string> = {
   ai_parse_expired: "模型解析已超时，请重新发起",
   ai_request_cancelled: "请求已取消，未执行查询",
   ai_tool_denied: "当前账号没有对应工具的读取或 ai_query 权限",
-  ai_tool_disabled: "管理员未启用此查询工具",
+  ai_tool_disabled: "管理员未启用此业务工具",
   ai_local_available: "此描述可由离线规则识别，请使用离线助手处理",
   ai_rate_limited: "解析请求过于频繁或已有请求处理中，请稍后重试",
   ai_timeout: "模型响应超时，未执行业务查询",
@@ -955,6 +959,7 @@ function Workspace() {
     queryFn: () => api("/auth/me"),
     retry: false,
   });
+  const [operationSelected, setOperationSelected] = useState<string>();
   const [page, setPage] = useState("dashboard"),
     [search, setSearch] = useState(""),
     [dark, setDark] = useState(false),
@@ -962,6 +967,7 @@ function Workspace() {
   function resetSession() {
     setPage("dashboard");
     setSearch("");
+    setOperationSelected(undefined);
     setError(undefined);
     qc.removeQueries({ predicate: (q) => q.queryKey[0] !== "me" });
     void qc.invalidateQueries({ queryKey: ["me"] });
@@ -1060,7 +1066,7 @@ function Workspace() {
         <div className="sidebar-bottom">
           <ShieldCheck size={18} />
           <span>
-            统一授权，安心协作<small>v1.0.9 · 开发版</small>
+            统一授权，安心协作<small>v1.0.10 · 开发版</small>
           </span>
         </div>
       </aside>
@@ -1107,12 +1113,15 @@ function Workspace() {
           ) : page === "ai" ? (
             <AIAssistantView
               api={api}
-              openOperations={() => setPage("operations")}
+              openOperations={(id) => {
+                setOperationSelected(id);
+                setPage("operations");
+              }}
             />
           ) : page === "ai-configuration" ? (
             <AIConfigurationView api={api} />
           ) : page === "operations" ? (
-            <OperationsView api={api} />
+            <OperationsView api={api} initialSelected={operationSelected} />
           ) : page === "messaging" ? (
             <MessagingView api={api} />
           ) : page === "configuration" ? (

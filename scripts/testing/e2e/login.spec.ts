@@ -1612,3 +1612,192 @@ test("optional AI configuration consent preview real gateway and offline fallbac
     page.getByRole("cell", { name: "9.0000", exact: true }),
   ).toBeVisible();
 });
+
+test("AI purchase local supplements transfer and password-confirmed draft", async ({
+  page,
+}) => {
+  await open(page);
+  await login(page);
+  const csrf = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "erp_csrf",
+  )!.value;
+  const headers = { "X-CSRF-Token": csrf };
+  const suffix = Date.now().toString();
+  const me = await (await page.request.get("/api/v1/auth/me")).json();
+  async function create(resource: string, data: unknown) {
+    const response = await page.request.post("/api/v1/" + resource, {
+      headers,
+      data,
+    });
+    expect(response.status()).toBe(200);
+    return response.json();
+  }
+  const product = await create("products", {
+    data: {
+      sku: "ai-purchase-" + suffix,
+      name: "AI采购验证商品 " + suffix,
+      unit: "piece",
+      owner_id: me.id,
+    },
+  });
+  const supplier = await create("suppliers", {
+    data: {
+      code: "ai-purchase-" + suffix,
+      name: "AI采购验证供应商 " + suffix,
+      owner_id: me.id,
+    },
+  });
+  const business = await (
+    await page.request.get("/api/v1/system_configuration")
+  ).json();
+  expect(
+    (
+      await page.request.patch("/api/v1/system_configuration", {
+        headers,
+        data: {
+          version: business.version,
+          values: { supported_currencies: ["CNY"], tax_mode: "no_tax" },
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  const config = await (
+    await page.request.get("/api/v1/ai/configuration")
+  ).json();
+  expect(
+    (
+      await page.request.patch("/api/v1/ai/configuration", {
+        headers,
+        data: {
+          version: config.version,
+          values: {
+            enabled: true,
+            base_url: config.allowed_base_urls[0],
+            model: "fixture-model",
+            tools: ["prepare_purchase_draft"],
+          },
+        },
+      })
+    ).status(),
+  ).toBe(200);
+  let handoffs = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      /\/ai\/requests\/[^/]+\/prepare$/.test(new URL(request.url()).pathname)
+    )
+      handoffs++;
+  });
+  await page.getByRole("button", { name: "AI 助手", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "业务描述", exact: true })
+    .fill("采购参数联调：帮我整理一笔采购计划，先保留缺失参数");
+  await page
+    .getByRole("button", { name: "先用离线规则理解", exact: true })
+    .click();
+  await page
+    .getByRole("checkbox", {
+      name: "我同意将本次描述发送至企业配置的模型服务",
+      exact: true,
+    })
+    .check();
+  await page
+    .getByRole("button", { name: "同意并使用 AI 理解", exact: true })
+    .click();
+  const form = page.getByRole("form", { name: "补充 AI 采购参数" });
+  await expect(form).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "确认参数并移交操作工作台", exact: true }),
+  ).not.toBeVisible();
+  await form
+    .getByRole("textbox", { name: "商品", exact: true })
+    .fill(product.name);
+  await form
+    .getByRole("textbox", { name: "供应商", exact: true })
+    .fill(supplier.name);
+  await form
+    .getByRole("button", { name: "保存补充并重新预览", exact: true })
+    .click();
+  await expect(page.getByText("还需补充：币种", { exact: true })).toBeVisible();
+  await form.getByRole("textbox", { name: "币种", exact: true }).fill("CNY");
+  await form
+    .getByRole("button", { name: "保存补充并重新预览", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "确认参数并移交操作工作台", exact: true }),
+  ).toBeVisible();
+  expect(handoffs).toBe(0);
+  async function matchingOrders() {
+    const result = await (
+      await page.request.get("/api/v1/purchase_orders?limit=100")
+    ).json();
+    return result.items.filter(
+      (row: { supplier_id: string }) => row.supplier_id === supplier.id,
+    );
+  }
+  expect(await matchingOrders()).toHaveLength(0);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/ai-purchase-desktop.png"),
+    fullPage: true,
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: path.join(root, "output/playwright/ai-purchase-mobile.png"),
+    fullPage: true,
+  });
+  await page
+    .getByRole("button", { name: "确认参数并移交操作工作台", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "操作工作台", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "采购草稿预览", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("30.00 CNY", { exact: true })).toBeVisible();
+  expect(handoffs).toBe(1);
+  expect(await matchingOrders()).toHaveLength(0);
+  const confirmation = page.getByRole("form", {
+    name: "确认请求",
+    exact: true,
+  });
+  await confirmation.getByLabel("当前 ERP 密码").fill("wrong-password");
+  await confirmation
+    .getByRole("button", { name: "确认创建采购草稿", exact: true })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "当前密码不正确" }),
+  ).toBeVisible();
+  await confirmation
+    .getByLabel("当前 ERP 密码")
+    .fill("Browser-fixture-" + "x".repeat(20));
+  await confirmation
+    .getByRole("button", { name: "确认创建采购草稿", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "采购草稿已创建", exact: true }),
+  ).toBeVisible();
+  const orders = await matchingOrders();
+  expect(orders).toHaveLength(1);
+  expect(orders[0]).toMatchObject({
+    status: "draft",
+    total: "30.00",
+    owner_id: me.id,
+  });
+  const latestConfig = await (
+    await page.request.get("/api/v1/ai/configuration")
+  ).json();
+  expect(
+    (
+      await page.request.patch("/api/v1/ai/configuration", {
+        headers,
+        data: { version: latestConfig.version, values: { enabled: false } },
+      })
+    ).status(),
+  ).toBe(200);
+});

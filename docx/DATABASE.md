@@ -4,27 +4,27 @@
 
 本文件先于业务实现建立。Phase 1 迁移只创建 identity、authorization、audit 与商品基础切片；Phase 2已迁移采购/库存基础表，并已开放采购单、审批、入库和库存的真实接口。消息身份、收件箱、操作会话、回复/连接运行态及客户/销售表已落地；通用工作流仍为后续设计。
 
-| 关系 | 约束与用途 |
-| --- | --- |
-| department → department | parent_id 外键，服务层防环 |
-| user → department / position / user | 所属部门、岗位、直属主管；引用 RESTRICT |
-| user ↔ role | user_role 复合主键，一个用户多角色 |
-| policy_revision → policy rules | 不可变 JSON AST 快照，版本唯一，author 外键 |
-| authorization_gate → policy_revision | singleton 当前版本 + 事务锁；禁止删除 |
-| session → user | 随机 token 仅存 SHA256，过期、撤销、CSRF 摘要 |
-| auth_throttle | 来源哈希，失败计数与锁定时间 |
-| product → user / department | 所有者与所属部门用于数据范围 |
-| audit_event → previous audit_event hash | 全局串行追加摘要链，应用不支持修改/删除 |
-| purchase_order → supplier / department / user | 单号唯一、NUMERIC 总额、状态、版本 |
-| purchase_line → purchase_order / product | 正数数量、非负单价，金额服务端计算 |
-| receipt_line → purchase_line / warehouse | 收货分摊、唯一业务来源防重复 |
-| inventory_balance → warehouse / product | 复合唯一，NUMERIC 数量与版本 |
+| 关系                                          | 约束与用途                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------ |
+| department → department                       | parent_id 外键，服务层防环                                         |
+| user → department / position / user           | 所属部门、岗位、直属主管；引用 RESTRICT                            |
+| user ↔ role                                   | user_role 复合主键，一个用户多角色                                 |
+| policy_revision → policy rules                | 不可变 JSON AST 快照，版本唯一，author 外键                        |
+| authorization_gate → policy_revision          | singleton 当前版本 + 事务锁；禁止删除                              |
+| session → user                                | 随机 token 仅存 SHA256，过期、撤销、CSRF 摘要                      |
+| auth_throttle                                 | 来源哈希，失败计数与锁定时间                                       |
+| product → user / department                   | 所有者与所属部门用于数据范围                                       |
+| audit_event → previous audit_event hash       | 全局串行追加摘要链，应用不支持修改/删除                            |
+| purchase_order → supplier / department / user | 单号唯一、NUMERIC 总额、状态、版本                                 |
+| purchase_line → purchase_order / product      | 正数数量、非负单价，金额服务端计算                                 |
+| receipt_line → purchase_line / warehouse      | 收货分摊、唯一业务来源防重复                                       |
+| inventory_balance → warehouse / product       | 复合唯一，NUMERIC 数量与版本                                       |
 | stock_movement → product / warehouse / source | 正数数量，kind区分采购增加/销售减少；采购/销售来源互斥，冲销待后续 |
-| message_binding → instance / user | 平台身份与实例复合唯一，验证挑战、撤销状态 |
-| message_inbox / command_execution | 平台事件唯一键、用户幂等键、payload 摘要 |
-| conversation → binding / intent | 状态、过期时间、确认摘要、版本 |
-| workflow_revision / approval / approval_event | 定义快照、申请摘要、审批人与操作不可变记录 |
-| outbox → aggregate | 事务内事件，发送可重试，消费端幂等 |
+| message_binding → instance / user             | 平台身份与实例复合唯一，验证挑战、撤销状态                         |
+| message_inbox / command_execution             | 平台事件唯一键、用户幂等键、payload 摘要                           |
+| conversation → binding / intent               | 状态、过期时间、确认摘要、版本                                     |
+| workflow_revision / approval / approval_event | 定义快照、申请摘要、审批人与操作不可变记录                         |
+| outbox → aggregate                            | 事务内事件，发送可重试，消费端幂等                                 |
 
 所有业务标识采用 UUID；金额 NUMERIC(18,2)，数量 NUMERIC(18,4)，UTC DateTime(timezone=True)。所有 FK 建立访问索引。业务行包含 created_at、updated_at、version；DB FK、唯一、CHECK 约束是第二道一致性边界。
 
@@ -49,16 +49,13 @@ Phase 2具体关系、精度、状态与幂等规则见PROCUREMENT.md；新增�
 
 Web发起时binding_id/binding_version为空，消息发起时保存有效绑定版本。One MessageBinding 1—N MessageOperation；User 1—N MessageOperation；完成的MessageOperation 1—1 PurchaseOrder。创建请求不创建订单。预览用同一非写入采购校验计划构建，执行仍走采购服务。确认同时检查会话version、摘要、当前绑定、当前主体/策略、引用资料版本，订单/会话完成/outbox/审计同事务。完成回放不得重复写入，结果按当前权限投影。只有归属用户可查看/补充/取消/确认，仍需统一策略授权；过期按访问时推进，不引入后台服务必需依赖。含任何新会话数据时拒绝破坏性迁移降级。
 
-
 ## v1.0.5 回复投递与连接运行态（已实现）
 
 onebot_instance 1—0..1 onebot_connection；message_inbox 1—0..1 message_delivery（event_key唯一外键）。message_delivery同时关联实例、可空用户和版本化绑定快照。回复只持久化受限recipe，不持久化结果正文，终态清除recipe。连接UUID作为跨进程租约栅栏，单实例仅一个未过期拥有者。新表、状态约束、外键与队列索引通过新迁移添加，旧表与迁移不改动。完整字段、状态、权限和失败语义见[DELIVERY.md](DELIVERY.md)。
 
-
 ## v1.0.6 客户与销售订单
 
 新增be0f9a8b7c6d（继承ad9e8f7a6b5c）：customer唯一编码/归属外键，sales_order客户/归属/审批人外键、唯一SO单号、非负NUMERIC总额及状态/审批人配对约束；sales_line订单/商品外键、订单内行号唯一、正数数量和非负金额。均包含UTC时间/version及FK索引。既有表、迁移、库存来源约束和策略快照不改动，不造业务资料；存在客户或销售历史时拒绝破坏性降级。完整ER关系与安全默认见SALES.md。
-
 
 ## v1.0.7 发货与方向流水
 
@@ -74,11 +71,15 @@ stock_movement新增唯一shipment_line_id外键，receipt_line_id变可空；ck
 
 新增独立迁移df2b1c0d9e8f，继承ce1a0b9c8d7e，不修改既有业务表。
 
-| 表 | 约束与关系 |
-| --- | --- |
-| ai_configuration | 单行id=1，version乐观锁，默认disabled、空URL/model/tools，timeout_seconds限制2至20；密钥不入库 |
-| ai_request | owner_id→erp_user、session_digest→session_token，用户/请求键唯一；config_version保存配置快照号，非历史配置外键 |
-| ai_request 状态 | parsing/failed/cancelled时intent为SQL NULL，ready/clarification时必须有校验后的JSON意图 |
-| ai_request 索引 | owner_id+created_at用于近期列表/频率，state+lease_expires_at用于进行中配额 |
+| 表               | 约束与关系                                                                                                     |
+| ---------------- | -------------------------------------------------------------------------------------------------------------- |
+| ai_configuration | 单行id=1，version乐观锁，默认disabled、空URL/model/tools，timeout_seconds限制2至20；密钥不入库                 |
+| ai_request       | owner_id→erp_user、session_digest→session_token，用户/请求键唯一；config_version保存配置快照号，非历史配置外键 |
+| ai_request 状态  | parsing/failed/cancelled时intent为SQL NULL，ready/clarification时必须有校验后的JSON意图                        |
+| ai_request 索引  | owner_id+created_at用于近期列表/频率，state+lease_expires_at用于进行中配额                                     |
 
 请求另保存参数摘要、原会话、5分钟过期时间、网络租约和受限错误码，不保存原始描述、供应商响应、API Key或查询结果。原有Gate保护初始登记和完成写回；HTTP期间没有数据库事务。已存在请求历史时拒绝破坏性降级，空请求表可显式退回ce1a0b9c8d7e；配置会随该降级删除，需先备份。PostgreSQL/SQLite均验证迁移元数据一致性。
+
+## v1.0.10 单次采购移交
+
+ai_handoff(request_id PK/FK→ai_request, operation_id UNIQUE/FK→message_operation, source_version>=1, created_at timestamptz)。独立迁移e03c2d1e0f9a，保留全部旧表与历史。Gate与唯一约束防并发重复移交；请求版本与待确认操作同事务提交。存在AI请求历史拒绝降级，避免旧版本不识别新create意图。

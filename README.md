@@ -1,8 +1,8 @@
-# 弗洛洛 ERP · v1.0.9 开发版
+# 弗洛洛 ERP · v1.0.10 开发版
 
 <img src="frontend/public/brand/floluo-logo.png" alt="弗洛洛 ERP Logo" width="144" height="144">
 
-面向单一企业局域网的 ERP，采用模块化单体、离线核心业务和统一权限边界。当前为 **v1.0.9 开发版**，已接入真实数据库与业务 API。
+面向单一企业局域网的 ERP，采用模块化单体、离线核心业务和统一权限边界。当前为 **v1.0.10 开发版**，已接入真实数据库与业务 API。
 
 [文档导航](docx/README.md) · [版本日志](docx/version.md) · [当前进度与验收范围](docx/IMPLEMENTATION.md) · [部署说明](docx/DEPLOYMENT.md)
 

@@ -2,9 +2,13 @@ from typing import Annotated, Literal
 
 from pydantic import Field, field_validator, model_validator
 
+from .intent import normalize_purchase_values
 from .messaging_api import StrictInput
 
-Tool = Literal["query_inventory", "query_purchase_orders", "query_sales_summary"]
+Tool = Literal[
+    "query_inventory", "query_purchase_orders", "query_sales_summary", "prepare_purchase_draft"
+]
+CREATE_TOOL = "prepare_purchase_draft"
 TOOL_RESOURCES = {
     "inventory": ("query_inventory", "inventory_balances"),
     "purchase_orders": ("query_purchase_orders", "purchase_orders"),
@@ -17,7 +21,7 @@ class ConfigurationValues(StrictInput):
     base_url: str = Field("", max_length=500)
     model: str = Field("", max_length=120)
     timeout_seconds: int = Field(10, ge=2, le=20)
-    tools: list[Tool] = Field(default_factory=list, max_length=3)
+    tools: list[Tool] = Field(default_factory=list, max_length=4)
 
     @field_validator("model", "base_url")
     @classmethod
@@ -83,7 +87,7 @@ class SalesArguments(StrictInput):
 
 
 class AIIntent(StrictInput):
-    operation: Literal["query"]
+    operation: Literal["query", "create"]
     resource: Literal["inventory", "purchase_orders", "sales_summary"]
     arguments: dict[str, str]
     references: dict[str, str]
@@ -92,8 +96,17 @@ class AIIntent(StrictInput):
 
     @model_validator(mode="after")
     def bounded_arguments(self):
+        if self.operation == "create":
+            if (
+                self.resource != "purchase_orders"
+                or not set(self.arguments) <= {"quantity", "unit_price", "currency", "unit"}
+                or not set(self.references) <= {"product", "supplier"}
+            ):
+                raise ValueError("unsupported write intent")
+            normalize_purchase_values({**self.arguments, **self.references})
+            return self
         if self.references:
-            raise ValueError("references not supported for read-only AI")
+            raise ValueError("references not supported for queries")
         kind = {
             "inventory": InventoryArguments,
             "purchase_orders": PurchaseArguments,
@@ -105,3 +118,9 @@ class AIIntent(StrictInput):
 
 class RequestVersion(StrictInput):
     version: int = Field(ge=1)
+
+
+class SupplementInput(RequestVersion):
+    values: dict[str, Annotated[str, Field(min_length=1, max_length=160)]] = Field(
+        min_length=1, max_length=6
+    )

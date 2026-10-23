@@ -4,10 +4,10 @@ from datetime import timedelta
 from fastapi import HTTPException
 from sqlalchemy import func, select
 
-from . import ai_gateway
+from . import ai_gateway, message_operations
 from .ai_client import ModelFailure, approved_endpoint
-from .ai_models import AIConfiguration, AIRequest
-from .ai_schemas import TOOL_RESOURCES, AIIntent, ConfigurationValues
+from .ai_models import AIConfiguration, AIHandoff, AIRequest
+from .ai_schemas import CREATE_TOOL, TOOL_RESOURCES, AIIntent, ConfigurationValues
 from .audit import digest
 from .local_parser import parse_message
 from .message_service import utc
@@ -69,6 +69,20 @@ def preview_permission(engine, data, action="read"):
 def view(engine, row):
     data = request_data(row)
     require(engine.authorize("ai_requests", "read", data))
+    link = engine.db.get(AIHandoff, row.id)
+    if link:
+        from .message_models import MessageOperation
+
+        operation = engine.db.get(MessageOperation, link.operation_id)
+        decision = engine.authorize(
+            "message_operations", "read", message_operations.metadata(operation)
+        )
+        if (
+            decision["allowed"]
+            and not decision["requires_approval"]
+            and decision["fields"].get("id") in {"read", "write"}
+        ):
+            data["operation_id"] = link.operation_id
     return engine.project("ai_requests", data)
 
 
@@ -188,14 +202,14 @@ def finish(db, engine, token, record_id, intent, error_code, settings):
             approved_endpoint(config["base_url"], settings.ai_allowed_base_urls)
         except ModelFailure:
             error_code, status = "ai_endpoint_denied", 503
-    if not error_code and TOOL_RESOURCES[intent.resource][0] not in config["tools"]:
+    if not error_code and tool_for(intent) not in config["tools"]:
         error_code, status = "ai_tool_disabled", 403
     row.version += 1
     if error_code:
         row.state, row.error_code, row.intent = "failed", error_code, None
         db.flush()
         return None, status, error_code
-    row.state = "ready" if intent.confidence >= 0.8 else "clarification"
+    row.state = intent_state(intent)
     row.intent = intent.model_dump()
     data = request_data(row)
     require(engine.authorize("ai_requests", "create", data), {"intent"})
@@ -217,10 +231,14 @@ def execute(db, engine, token, row, version, settings):
     if not config["enabled"] or config["version"] != row.config_version:
         raise HTTPException(409, "ai_configuration_changed")
     intent = AIIntent.model_validate(row.intent)
+    if intent.operation != "query":
+        raise HTTPException(409, "ai_write_preview_required")
     return ai_gateway.execute(db, engine, intent, config["tools"])
 
 
 def cancel(db, engine, row, version):
+    if db.get(AIHandoff, row.id):
+        raise HTTPException(409, "ai_request_transferred")
     if row.version != version:
         raise HTTPException(409, "version_conflict")
     if row.state not in {"parsing", "ready", "clarification"}:
@@ -230,3 +248,107 @@ def cancel(db, engine, row, version):
     require(engine.authorize("ai_requests", "cancel", request_data(row)), {"state"})
     db.flush()
     return view(engine, row)
+
+
+def tool_for(intent):
+    return CREATE_TOOL if intent.operation == "create" else TOOL_RESOURCES[intent.resource][0]
+
+
+def intent_state(intent):
+    if intent.confidence < 0.8:
+        return "clarification"
+    if intent.operation == "create":
+        _, missing = message_operations.normalize({**intent.arguments, **intent.references})
+        if missing:
+            return "clarification"
+    return "ready"
+
+
+def live_purchase(db, engine, row, version, settings, action):
+    if row.version != version:
+        raise HTTPException(409, "version_conflict")
+    preview_permission(engine, request_data(row))
+    preview_permission(engine, request_data(row), action)
+    if utc(row.expires_at) <= now():
+        raise HTTPException(410, "ai_request_expired")
+    config = configuration(db, settings)
+    if not config["enabled"] or config["version"] != row.config_version:
+        raise HTTPException(409, "ai_configuration_changed")
+    if row.state not in {"ready", "clarification"}:
+        raise HTTPException(409, "ai_request_not_ready")
+    intent = AIIntent.model_validate(row.intent)
+    if intent.operation != "create" or tool_for(intent) not in config["tools"]:
+        raise HTTPException(403, "ai_tool_disabled")
+    if intent.confidence < 0.8:
+        raise HTTPException(409, "ai_confidence_low")
+    return intent
+
+
+def supplement(db, engine, row, version, values, settings):
+    intent = live_purchase(db, engine, row, version, settings, "update")
+    if db.get(AIHandoff, row.id):
+        raise HTTPException(409, "ai_request_transferred")
+    if row.version >= 12:
+        raise HTTPException(409, "ai_supplement_limit")
+    merged, _ = message_operations.normalize({**intent.arguments, **intent.references, **values})
+    updated = AIIntent.model_validate(
+        {
+            **intent.model_dump(),
+            "arguments": {k: v for k, v in merged.items() if k not in {"product", "supplier"}},
+            "references": {k: v for k, v in merged.items() if k in {"product", "supplier"}},
+        }
+    )
+    candidate = {
+        **request_data(row),
+        "version": row.version + 1,
+        "intent": updated.model_dump(),
+        "state": intent_state(updated),
+    }
+    require(engine.authorize("ai_requests", "update", request_data(row)), {"intent"})
+    require(engine.authorize("ai_requests", "update", candidate), {"intent"})
+    preview_permission(engine, candidate)
+    row.intent, row.state, row.version = (
+        candidate["intent"],
+        candidate["state"],
+        candidate["version"],
+    )
+    db.flush()
+    return view(engine, row)
+
+
+def handoff(db, engine, row, version, settings):
+    link = db.get(AIHandoff, row.id)
+    # A retry must use the original accepted version, never silently accept changed parameters.
+    if link and version != link.source_version:
+        raise HTTPException(409, "version_conflict")
+    intent = live_purchase(db, engine, row, row.version if link else version, settings, "prepare")
+    if row.state != "ready":
+        raise HTTPException(409, "ai_request_not_ready")
+    bounded = ai_gateway.ToolEngine(engine, "purchase_orders", "create", "ai_prepare")
+    if link:
+        operation = message_operations.load(db, bounded, link.operation_id)
+        message_operations.prepare(db, bounded, operation)
+    else:
+        operation = message_operations.create(
+            db, bounded, {**intent.arguments, **intent.references}
+        )
+        link = AIHandoff(
+            request_id=row.id, operation_id=operation.id, source_version=version, created_at=now()
+        )
+        db.add(link)
+        row.version += 1
+        candidate = request_data(row)
+        require(engine.authorize("ai_requests", "prepare", candidate), {"intent"})
+        preview_permission(engine, candidate)
+        db.flush()
+    metadata = message_operations.metadata(operation)
+    decision = bounded.authorize("message_operations", "read", metadata)
+    require(decision)
+    if any(
+        decision["fields"].get(key) not in {"read", "write"}
+        for key in ("id", "version", "state", "preview")
+    ):
+        raise HTTPException(403, "preview_read_denied")
+    # No order is created. From this explicit human transfer on, ordinary Web rules govern it.
+    result = message_operations.view(db, bounded, operation)
+    return {"request": view(engine, row), "operation": result}

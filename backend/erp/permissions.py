@@ -416,13 +416,14 @@ RESOURCES["ai_requests"] = Resource(
             "state",
             "intent",
             "error_code",
+            "operation_id",
             "created_at",
             "expires_at",
         }
     ),
-    frozenset({"read", "create", "execute", "cancel"}),
+    frozenset({"read", "create", "execute", "cancel", "update", "prepare"}),
     "owner_id",
-    virtual_fields=frozenset({"intent", "created_at", "expires_at"}),
+    virtual_fields=frozenset({"intent", "operation_id", "created_at", "expires_at"}),
 )
 for _name in ("inventory_balances", "purchase_orders", "sales_orders"):
     _spec = RESOURCES[_name]
@@ -434,6 +435,17 @@ for _name in ("inventory_balances", "purchase_orders", "sales_orders"):
         _spec.department_column,
         _spec.virtual_fields,
     )
+
+
+_spec = RESOURCES["purchase_orders"]
+RESOURCES["purchase_orders"] = Resource(
+    _spec.model,
+    _spec.fields,
+    _spec.actions | {"ai_prepare"},
+    _spec.owner_column,
+    _spec.department_column,
+    _spec.virtual_fields,
+)
 
 
 LEVEL = {"hidden": 0, "masked": 1, "read": 2, "write": 3}

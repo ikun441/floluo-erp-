@@ -105,3 +105,33 @@ def parse_fixed_command(text: str) -> ParseResult:
     return ParseResult(
         BusinessIntent("create", "purchase_orders", values, references, 1.0), missing
     )
+
+
+PURCHASE_KEYS = {
+    "product": "商品",
+    "supplier": "供应商",
+    "quantity": "数量",
+    "unit_price": "单价",
+    "currency": "币种",
+    "unit": "单位",
+}
+
+
+def normalize_purchase_values(values):
+    if not isinstance(values, dict) or not set(values) <= PURCHASE_KEYS.keys():
+        raise ValueError("invalid_operation_values")
+    if any(not isinstance(v, str) or not v.strip() or len(v) > 160 for v in values.values()):
+        raise ValueError("invalid_operation_values")
+    values = {k: v.strip() for k, v in values.items()}
+    if "currency" in values and (
+        not values["currency"].isascii() or not values["currency"].isupper()
+    ):
+        raise ValueError("invalid_operation_values")
+    parsed = parse_fixed_command(
+        shlex.join(
+            ["/erp", "采购", "新增", *[PURCHASE_KEYS[k] + "=" + v for k, v in values.items()]]
+        )
+    )
+    if parsed.intent is None:
+        raise ValueError("invalid_operation_values")
+    return values, list(parsed.missing)

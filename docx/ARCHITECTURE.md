@@ -43,11 +43,9 @@ OneBot transport → message_gateway（Gate、事务、收件箱和审计）→ 
 
 Web/OneBot → message_operations应用服务 → procurement.prepare_draft纯计划/统一权限 → Web密码复核后procurement.draft。预览与执行共用校验逻辑，参数及引用版本摘要将用户所见与提交内容绑定；版本或绑定变化后重新预览。MessageOperation持久化收集/确认/取消/过期/完成状态，消息适配器不直接写业务数据。新增操作工作台连接真实API；版本日志迁至docx/version.md。
 
-
 ## v1.0.6 客户与销售基础
 
 SalesView → sales_api → sales → order_support + Engine → sales_models/PostgreSQL。客户资料使用同一受限目录服务，权限字段/动作通过注册表驱动权限中心。order_support仅提取原有受限引用、配置、版本、线格式及outbox工具；procurement保留导入兼容，不改变其调用契约。销售和采购共享币种/税配置，销售始终独立审批；销售订单只进入草稿/提交/批准/取消状态，本切片不变动库存。未来出库复用库存领域事务，不直接改余额。详见SALES.md。
-
 
 ## v1.0.7 销售出库
 
@@ -66,3 +64,7 @@ AIAssistantView/AIConfigurationView→ai_api→ai_service→ai_client或ai_gatew
 模型解析采用“短事务登记/授权并提交→无DB事务的有界HTTP→短事务重新认证/授权并保存”流程，网络期间不占Gate。全企业2个/每用户1个进行中配额与每分钟5次计数来自同一数据库，幂等键避免响应丢失后再次调用模型。取消、租约过期、会话撤销、配置变化与权限变更均禁止旧调用完成或执行。
 
 只读工具结果直接展示在ERP，重复确认重新查询；模型不会接收业务记录或结果总结。本版不引入模型必需的Celery/Redis/云服务。AI写入、多轮补充和消息平台AI接入后续单独实现。
+
+## v1.0.10 采购意图与人工流程
+
+intent.py中的纯normalize_purchase_values为离线、AI schema及操作工作台共用。AIIntent只允许查询或单商品采购create；补全与移交无网络调用。ai_handoff建立AI请求到既有message_operation的一对一关系，Gate事务内以create∩ai_prepare验证候选，最多移交一次。明确接受后的人工流程复用原摘要、引用版本、当前密码和草稿幂等服务，不反向依赖AI开关。

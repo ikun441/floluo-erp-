@@ -15,12 +15,12 @@
 
 `categories`、`suppliers`、`warehouses`与`products`使用以下统一接口：
 
-| 方法 | 路径 | 请求 |
-| --- | --- | --- |
-| GET | /api/v1/{resource}?limit=50&after=UUID | 范围过滤后固定ID分页 |
-| GET | /api/v1/{resource}/{id} | 不可见与不存在统一404 |
-| POST | /api/v1/{resource} | `{ "data": { ... } }` |
-| PATCH | /api/v1/{resource}/{id} | `{ "version": 1, "data": { ... } }` |
+| 方法  | 路径                                   | 请求                                |
+| ----- | -------------------------------------- | ----------------------------------- |
+| GET   | /api/v1/{resource}?limit=50&after=UUID | 范围过滤后固定ID分页                |
+| GET   | /api/v1/{resource}/{id}                | 不可见与不存在统一404               |
+| POST  | /api/v1/{resource}                     | `{ "data": { ... } }`               |
+| PATCH | /api/v1/{resource}/{id}                | `{ "version": 1, "data": { ... } }` |
 
 分类字段name、parent_id；商品新增可空category_id。供应商/仓库字段code、name、owner_id、department_id、active，供应商另有可空contact和phone。写入需要相应字段write权限。关联分类必须可读且ID可见；环形分类关系拒绝。已有策略不会因迁移自动获得新资源或新字段权限。
 
@@ -30,16 +30,16 @@
 
 下列专用接口使用扁平业务命令，不使用资料CRUD的data包装：
 
-| 方法 | 路径 | 功能 |
-| --- | --- | --- |
-| GET/POST | /api/v1/purchase_orders | 受限列表 / 创建草稿 |
-| GET/PATCH | /api/v1/purchase_orders/{id} | 受限详情 / 完整草稿编辑，含version |
-| POST | /api/v1/purchase_orders/{id}/submit | 提交审批，body含version |
-| POST | /api/v1/purchase_orders/{id}/approve | 独立审批，body含version |
-| POST | /api/v1/purchase_orders/{id}/cancel | 未入库单据取消，body含version |
-| POST | /api/v1/purchase_orders/{id}/receive | 采购收货并记库存，必须提供Idempotency-Key |
-| GET | /api/v1/purchase_receipts、inventory_balances、stock_movements | 当前授权下的列表和详情 |
-| GET/PATCH | /api/v1/system_configuration | 当前业务配置 / 按version局部更新values |
+| 方法      | 路径                                                           | 功能                                      |
+| --------- | -------------------------------------------------------------- | ----------------------------------------- |
+| GET/POST  | /api/v1/purchase_orders                                        | 受限列表 / 创建草稿                       |
+| GET/PATCH | /api/v1/purchase_orders/{id}                                   | 受限详情 / 完整草稿编辑，含version        |
+| POST      | /api/v1/purchase_orders/{id}/submit                            | 提交审批，body含version                   |
+| POST      | /api/v1/purchase_orders/{id}/approve                           | 独立审批，body含version                   |
+| POST      | /api/v1/purchase_orders/{id}/cancel                            | 未入库单据取消，body含version             |
+| POST      | /api/v1/purchase_orders/{id}/receive                           | 采购收货并记库存，必须提供Idempotency-Key |
+| GET       | /api/v1/purchase_receipts、inventory_balances、stock_movements | 当前授权下的列表和详情                    |
+| GET/PATCH | /api/v1/system_configuration                                   | 当前业务配置 / 按version局部更新values    |
 
 采购草稿参数：supplier_id、currency（显式三位大写币种）、note、lines。每行包含product_id、quantity、unit_price；数量和价格使用十进制字符串或整数，拒绝JSON浮点。行金额必须精确到分，不能静默舍入。所有者、部门、单号、状态、总额由服务端决定。PATCH同样要求完整草稿字段和version，且仅draft可编辑。
 
@@ -70,7 +70,6 @@
 
 详情预览需要message_operations.preview可读及全部关键采购金额字段可读；更新参数需preview可写，取消/确认需state可写。409用于旧版本/旧摘要/终态冲突，403用于当前授权、绑定或预览不足。请求固定10分钟，单用户最多20条等待态。密码复核限流/锁定沿用统一认证保护。详见OPERATIONS.md。
 
-
 ## v1.0.5 离线解析接口
 
 以下三个POST均只接受`{text: string}`，1–4096字符，拒绝额外键；要求当前会话与CSRF/Origin。没有数据库字段、SQL、身份或模型参数入口。
@@ -81,14 +80,12 @@
 
 不识别/类型不匹配为422；单位不可读或与商品不一致统一422 quantity_unit_unresolved。规则与边界详见[INTERACTION.md](INTERACTION.md)。不增加新角色权限，也不会扩展旧角色授权。
 
-
 ## v1.0.5 只读消息监控
 
 - GET `/api/v1/onebot_connections?limit=50&after=&state=`：state为connected/disconnected，limit≤100；返回当前可见实例的连接元数据。连接UUID/凭据不暴露；state=connected还须结合lease_expires_at确认有效。
 - GET `/api/v1/message_deliveries?limit=50&after=&state=`：state为pending/awaiting_ack/delivered/failed/suppressed/expired；仅返回当前允许的元数据，不能获取recipe、收件人、原文或业务结果。
 
 分别要求新资源onebot_connections/message_deliveries的read，并且关联实例ID当前可读；数据范围在分页前过滤，按状态/ID筛选需相应字段可读。没有通用详情或写入/强制补发接口。日期在投影后输出UTC ISO8601；过期按受限维护推进。已有角色需显式授权，新bootstrap为当前资源建立策略。
-
 
 ## v1.0.6 客户与销售
 
@@ -100,14 +97,13 @@
 
 写入与outbox/审计同事务，写入成功但缺少读取权限时只返回`{saved:true}`；所有路由使用相同会话/CSRF/Origin/Gate边界。升级需显式给旧角色授权customers/sales_orders。
 
-
 ## v1.0.7 销售出库与库存方向
 
-| 方法 | 路径 | 请求与行为 |
-| --- | --- | --- |
-| POST | `/api/v1/sales_orders/{id}/ship` | Header `Idempotency-Key`；body `{version,warehouse_id,lines:[{line_id,quantity}]}` |
-| GET | `/api/v1/sales_shipments?limit=50&after=&order_id=` | 当前可读出库单，limit≤100，按ID游标分页 |
-| GET | `/api/v1/sales_shipments/{id}` | 当前可读发货单及受保护明细 |
+| 方法 | 路径                                                | 请求与行为                                                                         |
+| ---- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| POST | `/api/v1/sales_orders/{id}/ship`                    | Header `Idempotency-Key`；body `{version,warehouse_id,lines:[{line_id,quantity}]}` |
+| GET  | `/api/v1/sales_shipments?limit=50&after=&order_id=` | 当前可读出库单，limit≤100，按ID游标分页                                            |
+| GET  | `/api/v1/sales_shipments/{id}`                      | 当前可读发货单及受保护明细                                                         |
 
 出库明细最多100行，至少一行；line_id必须属于当前订单，不能重复，quantity为正数十进制字符串或整数（最多4位小数），拒绝float/bool/额外身份字段。按商品合计需求后整体校验，任一行超计划或库存不足409，库存不存在或数量不可读统一404 inventory_unavailable。订单/仓库ship及发货create、字段/引用权限均校验，待审批策略不能直接执行。
 
@@ -128,3 +124,7 @@ GET `/api/v1/reports/{inventory|movements|purchases|sales}` 返回items/columns/
 新增`/api/v1/ai/status`、`/configuration`、`/requests`及请求详情/execute/cancel，完整契约见[AI说明](AI.md)。默认禁用，POST解析要求text、consent=true和Idempotency-Key；本地可识别的描述返回ai_local_available，不调用模型。配置PATCH使用version与部分values，先验证旧/新候选和字段写权限。
 
 解析返回标准结构化意图与ready/clarification/failed等状态，确认只支持库存、采购查询与销售汇总。模型网络I/O外置于短授权事务之间；完成与执行分别重查当前会话/权限/配置。execute只返回当前业务服务投影，不把结果交回模型。所有POST/PATCH仍需CSRF/Origin校验。参数验证若早于事务依赖，失败审计兜底只记录模板路径、身份和422；既有事务已记录的错误不会重复记账。
+
+## v1.0.10 AI采购补全与移交
+
+PATCH /api/v1/ai/requests/{id} 接收version和非空values（product/supplier/quantity/unit_price/currency/unit字符串），只修改当前原会话的结构化意图，最多10次，按旧/新update字段授权。POST /api/v1/ai/requests/{id}/prepare 接收version，要求prepare与当前采购create∩ai_prepare，原子创建最多一个message_operation，返回{request, operation}；重试使用原接受版本，不创建订单。查询execute拒绝create意图。之后普通message_operations确认仍需当前密码与摘要；该明确人为移交后的流程不依赖AI开关。

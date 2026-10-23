@@ -2,9 +2,9 @@
 
 [文档导航](README.md) · [版本日志](version.md)
 
-## v1.0.9 已实现范围
+## 当前已实现范围（v1.0.10）
 
-本阶段交付只读AI辅助解析，默认关闭。离线固定命令/本地规则始终优先；本地已识别的描述不会调用模型。用户明确同意后，仅发送本次输入与静态意图格式，不发送任何数据库记录、用户角色、业务配置或隐藏字段。模型只生成标准结构化意图，返回后还需用户确认查询；模型输出不执行SQL、代码或写入业务。
+AI默认关闭；支持受控只读查询及单商品采购参数预览/人工移交。离线固定命令/本地规则始终优先；本地已识别的描述不会调用模型。用户明确同意后，仅发送本次输入与静态意图格式，不发送任何数据库记录、用户角色、业务配置或隐藏字段。模型只生成标准结构化意图，返回后还需用户确认查询；模型输出不执行SQL、代码或写入业务。
 
 ### 数据关系（编写业务代码前确认）
 
@@ -21,7 +21,7 @@ Web→ai_api→ai_service→白名单HTTP模型适配器或ai_gateway→原业�
 
 ### 授权
 
-ai_configuration支持read/update；ai_requests支持read/create/execute/cancel且永远额外限定当前用户与原会话。intent字段控制可写描述解析与可读预览，执行要求完整预览可读并检查execute。inventory_balances/purchase_orders/sales_orders增加独立ai_query动作。工具取read∩ai_query，行范围、字段最严约束、明确拒绝与待审批均生效；销售汇总另需report。关联资料沿用原Web可读约束，不能由模型提供user_id、role、SQL、代码、任意URL或扩大范围。
+ai_configuration支持read/update；ai_requests支持read/create/execute/cancel/update/prepare且永远额外限定当前用户与原会话。intent字段控制可写描述解析与可读预览，执行要求完整预览可读并检查execute。inventory_balances/purchase_orders/sales_orders增加独立ai_query动作。工具取read∩ai_query，行范围、字段最严约束、明确拒绝与待审批均生效；销售汇总另需report。关联资料沿用原Web可读约束，不能由模型提供user_id、role、SQL、代码、任意URL或扩大范围。
 
 | 工具                  | 标准意图资源    | 应用服务                                                 |
 | --------------------- | --------------- | -------------------------------------------------------- |
@@ -41,7 +41,7 @@ ai_configuration支持read/update；ai_requests支持read/create/execute/cancel�
 
 ### 本阶段边界
 
-不配置真实供应商或调用付费端点，使用隔离HTTP测试服务验证协议与真实业务查询；不声称模型语义准确率或生产模型已验收。AI写入采购/销售、多轮补充、OneBot AI接入、对话总结与更多工具留待后续版本。Harness仅用于开发辅助，不是产品AI运行依赖。
+不配置真实供应商或调用付费端点，使用隔离HTTP测试服务验证协议与真实业务查询；不声称模型语义准确率或生产模型已验收。采购仅支持本地结构化补充并人工移交，不自动执行业务。多轮自然语言模型调用、销售写入、OneBot AI接入、对话总结与更多工具留待后续版本。Harness仅用于开发辅助，不是产品AI运行依赖。
 
 ## 已实现 API
 
@@ -61,3 +61,19 @@ ai_configuration支持read/update；ai_requests支持read/create/execute/cancel�
 未授权403或范围内不存在404；禁用/处理中/参数摘要冲突/版本变化409；过期410；参数422；频率/容量429；模型不可用、响应校验失败或超时502。错误不会反射供应商正文。原会话已注销/用户停用时401，模型结果不会持久化为可执行预览。
 
 原始描述仅存在本次调用内存及显式同意的模型请求中；校验后的intent可能保留商品关键词/单号，属于企业业务数据，应纳入数据库备份与历史保留管理。没有自动清理策略。模型服务的数据保留与网络出口须由部署管理员配置，不能以协议兼容性代替供应商验收。
+
+## v1.0.10 已实现：采购参数补全与人为移交
+
+本阶段增加单商品采购意图（create/purchase_orders），独立工具prepare_purchase_draft默认不启用。模型只提取arguments(quantity/unit_price/currency/unit)和references(product/supplier)，缺失值留空，不提供数据库实体，不产生业务记录。置信度不足不能经表单提升。高置信度的缺失字段可在本地结构化表单多轮补充，最多10次，固定5分钟有效，不再次发送模型。
+
+关系：ai_request 1 → 0..1 ai_handoff → 1 message_operation。新表ai_handoff以request_id为主键/FK、operation_id唯一FK，保存移交前请求版本和时间；唯一约束与同一Gate事务防止重复创建待确认请求。旧表、旧策略及旧迁移保持不变。有AI解析历史拒绝回退该迁移，防止旧代码读取新意图。
+
+权限：ai_requests增加update/prepare动作和operation_id虚拟字段，采购增加ai_prepare动作。补充与移交校验原登录会话、当前身份、请求版本/期限、配置版本/工具、原/新字段授权；移交时采购create∩ai_prepare约束作用于真实候选，引用资料和金额预览沿用操作工作台。查询execute不接收写入意图。旧角色不自动扩权。
+
+状态：parsing → clarification（低置信度或参数缺失）/ready；高置信度clarification经本地补充可变为ready。ready → 用户明确移交（AI请求冻结参数，链接待确认操作）；重复原版本移交只返回同一操作，不能创建订单。移交后由操作工作台管理，不能再修改/取消AI源意图；普通请求的取消/超时与原密码确认仍有效。
+
+API：PATCH /ai/requests/{id}补充{version,values}；POST /ai/requests/{id}/prepare带{version}，仅创建待确认请求。移交是用户接受结构化参数后转为普通人工流程的明确边界：后续可独立于AI开关运行，确认始终重新校验当前业务权限、引用版本、预览摘要并要求当前密码，最多创建一张采购草稿，不提交/审批/入库。
+
+本阶段不增加对话原文存储或多轮模型调用，不支持多商品AI采购、AI审批、AI出入库或OneBot AI。后续可在逐次同意和明确上下文边界下扩展自然语言轮次。
+
+使用步骤见[AI采购使用说明](AI_WORKFLOW.md)。

@@ -44,13 +44,11 @@ preview字段控制参数写入与完整预览展示，state字段控制显式�
 
 确认检查原参数摘要和资料版本并在创建后提交前复核；重放再次要求当前create权限并投影当前可见结果。requires_approval仍拒绝执行，不把请求确认当作通用审批。
 
-
 ## v1.0.5 监控与投递
 
 onebot_connections与message_deliveries仅有read；后者支持own/records/all，前者支持records/all。关联onebot_instances.id必须在当前可读范围，筛选state和游标id也需可读。监控不注册recipe、收件人、连接UUID/回执token或原文字段，不能经通用CRUD读写。旧角色必须显式增加新资源权限；前端隐藏不替代后端约束。
 
 投递器是内部受限执行者，不能接受客户端角色/SQL/自由工具。业务回复每次按保存主体、平台收件人和绑定版本重建Engine，检查bindings.use后调用相同业务服务。只重建查询或已有请求视图，不重放创建/审批/入库。身份失效或请求授权不足抑制并清除recipe，读取权限变化按当前范围/字段重新过滤。
-
 
 ## v1.0.6 销售资源
 
@@ -58,18 +56,17 @@ customers复用目录read/create/update；sales_orders注册read/create/update/s
 
 销售列表/详情在SQL中过滤当前客户和所有商品的可读ID，状态/游标探测须相应字段可读；金额三字段取最严格投影，不能从明细反推隐藏总额。编辑旧/新候选与实际提交字段均校验；状态迁移旧/新状态授权，requires_approval继续拒绝，独立审批不替代业务权限。创建归属取服务端当前身份。审批不产生库存权限或变动。
 
-
 ## v1.0.7 出库授权矩阵
 
-| 资源/字段 | 必需授权或用途 |
-| --- | --- |
-| sales_orders.ship | 发货前/后订单状态均授权，显式拒绝优先 |
-| warehouses.ship | 当前目标仓库有出库操作权限，且仓库ID可读 |
-| sales_shipments.create | 发货资源符合范围，order_id/warehouse_id/lines可写 |
-| inventory_balances.read | 目标库存当前id和quantity可读，否则统一404 |
-| customers/products.read | 客户及订单全部商品ID当前可读，本次发货引用须启用 |
-| sales_shipments.read | 查询/回放发货记录；范围与来源关系在分页前过滤 |
-| sales_orders.shipped_quantity | 新增虚拟字段，控制各行已发数量；不允许SQL条件 |
+| 资源/字段                     | 必需授权或用途                                    |
+| ----------------------------- | ------------------------------------------------- |
+| sales_orders.ship             | 发货前/后订单状态均授权，显式拒绝优先             |
+| warehouses.ship               | 当前目标仓库有出库操作权限，且仓库ID可读          |
+| sales_shipments.create        | 发货资源符合范围，order_id/warehouse_id/lines可写 |
+| inventory_balances.read       | 目标库存当前id和quantity可读，否则统一404         |
+| customers/products.read       | 客户及订单全部商品ID当前可读，本次发货引用须启用  |
+| sales_shipments.read          | 查询/回放发货记录；范围与来源关系在分页前过滤     |
+| sales_orders.shipped_quantity | 新增虚拟字段，控制各行已发数量；不允许SQL条件     |
 
 旧策略快照不变，不自动增加ship动作、发货资源或已发字段。发货读取不返回订单金额；发货与库存流水的来源ID须当前可读，隐藏来源ID不能通过游标或关联绕过。回放重新校验当前ship/create和读取授权，不能取队列里的旧数据或重复执行扣减。库存余额/流水仍无通用写入接口。
 
@@ -86,3 +83,7 @@ ai_configuration支持read/update；ai_requests支持read/create/execute/cancel�
 inventory_balances、purchase_orders、sales_orders增加ai_query。ToolEngine将主资源read与ai_query的行范围和字段权限取交集，显式拒绝和待审批优先；关联资料仍沿用既有Web读取约束。库存/采购最多20条，字段投影和金额联动与Web一致；销售汇总另需report，参与聚合字段必须完整可读。
 
 管理员工具开关不能授予业务权限；模型不可传主体、角色、SQL、URL或额外参数。旧策略不增加新资源/动作，需在权限中心显式授权。预览不是授权凭证，完成与执行重查当前策略/用户/会话/配置/期限。失败与工具调用审计不记录原文、模型正文、数据单元格或密钥。详见[配置顺序与API](AI.md)。
+
+## v1.0.10 AI采购授权
+
+ai_requests增加update/prepare，字段增加operation_id虚拟投影；purchase_orders增加ai_prepare。工具开关prepare_purchase_draft默认不启用，旧策略不扩权。补全旧/新intent均需可写、完整预览可读；移交在原会话与配置版本下取采购create∩ai_prepare，金额、来源、本人范围、显式拒绝和待审批均检查。操作链接仅在当前操作read/id可读时返回。移交是接受参数进入普通人为流程的明确边界，后续继续按工作台权限、当前密码/摘要确认；不自动执行任何订单状态流转。策略每条动作数上限32，合法名称仍须属于资源注册白名单。
