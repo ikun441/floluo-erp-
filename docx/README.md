@@ -2,61 +2,31 @@
 
 [项目首页](../README.md) · [版本日志](version.md) · [当前进度](IMPLEMENTATION.md)
 
-项目文档统一存放在 `docx/`，采用 Markdown，便于在 GitHub 和编辑器中阅读。当前应用版本为 **v1.0.10 开发版**；功能完成情况和实际测试结果以 [实施记录](IMPLEMENTATION.md) 为准。
+当前版本 v1.0.10。文档已按主题从23份合并为9份，保留历史版本、迁移、安全限制和可信验收记录；避免同一主题分散查阅。
 
 ## 从这里开始
 
-| 你的目标                   | 推荐阅读顺序                                                               |
-| -------------------------- | -------------------------------------------------------------------------- |
-| 安装、升级或恢复系统       | [部署说明](DEPLOYMENT.md) → [安全边界](SECURITY.md)                        |
-| 了解能用什么、接下来做什么 | [实施记录](IMPLEMENTATION.md) → [版本日志](version.md)                     |
-| 配置角色和数据权限         | [权限模型](PERMISSIONS.md) → [API](API.md)                                 |
-| 开始参与开发               | [开发约定](../AGENTS.md) → [架构](ARCHITECTURE.md) → [数据库](DATABASE.md) |
+| 目的                               | 手册                                                   |
+| ---------------------------------- | ------------------------------------------------------ |
+| 查看已实现功能、测试与下一步       | [当前进度](IMPLEMENTATION.md)                          |
+| 安装、升级、备份与安全             | [部署与安全](DEPLOYMENT.md)                            |
+| 日常采购、销售、库存与报表         | [业务手册](BUSINESS.md)                                |
+| 离线指令、AI采购、操作确认与OneBot | [交互手册](INTERACTION.md)                             |
+| 架构、数据库和细粒度权限           | [架构手册](ARCHITECTURE.md)                            |
+| 已实现HTTP接口及错误语义           | [API](API.md)                                          |
+| 开发规范、Harness记录、登录与品牌  | [开发手册](DEVELOPMENT.md) · [AGENTS.md](../AGENTS.md) |
+| 各版本变更和历史验收               | [版本日志](version.md)                                 |
 
 <a id="business"></a>
 
-## 业务与消息使用
+## 业务快捷入口
 
-| 文档                          | 阅读内容                                       |
-| ----------------------------- | ---------------------------------------------- |
-| [AI采购使用](AI_WORKFLOW.md)  | 结构化补全、单次移交与工作台密码确认           |
-| [采购与库存](PROCUREMENT.md)  | 采购单、独立审批、分批入库、库存流水及业务边界 |
-| [客户与销售](SALES.md)        | 客户资料、销售草稿、独立审批与订单状态         |
-| [销售出库](SHIPMENTS.md)      | 分批发货、库存不足保护、幂等重试与出库记录     |
-| [分析与报表](REPORTS.md)      | 库存/出入库、订单汇总、独立导出授权与统计口径  |
-| [操作工作台](OPERATIONS.md)   | 请求补充、预览、密码确认、取消与超时           |
-| [离线指令](INTERACTION.md)    | 当前支持的中文表达、单位校验及受控执行         |
-| [OneBot 接入](ONEBOT.md)      | 反向连接、身份绑定、固定命令和交互状态机       |
-| [回复与连接监控](DELIVERY.md) | 有界重试、API 回执、租约和监控权限             |
-| [术语与命令示例](GLOSSARY.md) | 术语解释与分阶段命令设计，使用时注意阶段标记   |
+[采购](BUSINESS.md#procurement) · [销售](BUSINESS.md#sales) · [出库](BUSINESS.md#shipments) · [报表](BUSINESS.md#reports) · [操作工作台](INTERACTION.md#operations) · [AI采购步骤](INTERACTION.md#ai-purchase) · [OneBot](INTERACTION.md#onebot)
 
 <a id="development"></a>
 
-## 架构与开发
+## 开发快捷入口
 
-| 文档                        | 阅读内容                                             |
-| --------------------------- | ---------------------------------------------------- |
-| [技术架构](ARCHITECTURE.md) | 模块边界、依赖关系、事务与阶段落地                   |
-| [数据库](DATABASE.md)       | 核心关系、约束与逐版本迁移                           |
-| [权限引擎](PERMISSIONS.md)  | 默认拒绝、数据范围、字段/条件规则及授权边界          |
-| [API 规范](API.md)          | 已实现接口、请求格式、权限与错误语义                 |
-| [安全边界](SECURITY.md)     | 身份、审计、消息与销售的保护措施及限制               |
-| [AI 助手与查询网关](AI.md)  | 模型配置、显式同意、只读预览与当前权限查询；默认关闭 |
+[模块边界](ARCHITECTURE.md#architecture) · [数据库](ARCHITECTURE.md#database) · [权限](ARCHITECTURE.md#permissions) · [安全](DEPLOYMENT.md#security) · [Harness](DEVELOPMENT.md#harness)
 
-## 运维、进度与协作
-
-| 文档                            | 阅读内容                             |
-| ------------------------------- | ------------------------------------ |
-| [部署与恢复](DEPLOYMENT.md)     | 启动、升级、备份恢复说明及未验收范围 |
-| [实施与验证](IMPLEMENTATION.md) | 当前可用功能、真实验证结果与剩余目标 |
-| [版本日志](version.md)          | 唯一更新记录；旧版详细记录可展开阅读 |
-| [Harness 委派记录](HARNESS.md)  | 隔离规则、委派结果及 Codex 接管边界  |
-| [登录页设计](LOGIN_DESIGN.md)   | 视觉方向、3D 动效与降级行为          |
-| [品牌资源](BRANDING.md)         | 原始 Logo、资源位置与使用说明        |
-
-## 文档维护约定
-
-- 新文档放在本目录，并加入对应分类；根目录保留项目首页和开发约定。
-- 文档之间使用同目录相对链接，引用代码时使用 `../backend/`、`../frontend/` 等仓库路径。
-- 更新记录只写入 [version.md](version.md)，已发布版本与未发布变更分开维护。
-- 区分设计、已实现功能和已执行验证；尚未完成的能力明确标记。
+文档仍使用Markdown，统一位于docx/；唯一版本日志为version.md。优先更新已有主题手册，不再为每个功能新增碎片文档。已实现、设计中和未验收能力必须分别说明。

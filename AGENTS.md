@@ -29,3 +29,5 @@
 - AI请求绑定用户/会话与幂等键，不保存原文、模型响应、查询结果或API密钥。早于事务依赖的参数失败也需受限审计，已有失败审计必须有标记避免重复。真实模型未联调不能声称已验收语义准确率或生产可用性。
 
 - AI采购只提取单商品结构化参数；本地补全不重复调用模型。ai_prepare与create交集后才可人为移交一次到message_operation，源意图冻结。此后按普通操作工作台权限/预览摘要/当前密码确认创建草稿；AI开关不是已接受人工流程的业务依赖，不允许自动提交/审批/入库。采购参数校验保持intent.py纯函数，共用于离线规则、AI与Web请求。
+
+- docx/固定按九份主题文档维护：README、ARCHITECTURE、API、BUSINESS、INTERACTION、DEPLOYMENT、DEVELOPMENT、IMPLEMENTATION、version。数据库/权限合入ARCHITECTURE，AI/消息/工作台合入INTERACTION，安全合入DEPLOYMENT，视觉/Harness合入DEVELOPMENT；新增内容优先更新现有章节与导航，唯一更新日志仍为version.md。
