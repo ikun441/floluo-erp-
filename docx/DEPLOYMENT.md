@@ -4,7 +4,7 @@
 
 当前范围以实施记录为准；下文保留必要的架构、升级与历史依据。
 
-[部署、升级与恢复](#deployment) · [安全边界](#security)
+[部署、升级与恢复](#deployment) · [本地一键启动](#deployment-本地一键启动) · [安全边界](#security)
 
 <a id="deployment"></a>
 
@@ -14,9 +14,19 @@
 
 ### 当前 Compose 基础
 
-Linux / Docker Compose：Nginx → Next.js / FastAPI → PostgreSQL 持久化卷。只暴露 Nginx；数据库和后端没有宿主端口映射。migrate 服务成功完成后启动后端，再经健康检查启动前端。管理员通过独立交互式 CLI 初始化，服务启动不自动创建管理员或业务数据。
+Linux / Docker Compose：Nginx → Next.js / FastAPI → PostgreSQL 持久化卷。Web入口由Nginx提供；数据库端口仅绑定宿主机回环地址供本地venv启动脚本访问。migrate服务成功完成后启动后端，再经健康检查启动前端。管理员通过独立交互式CLI初始化，Compose生产服务启动不自动创建管理员或业务数据。
 
 运行 `python3 scripts/init_env.py` 生成权限0600的本机 .env；数据库密码随机生成，不回显，不覆盖已有配置。默认仅127.0.0.1:8080、HTTP与非Secure Cookie，用于本机验证。局域网正式使用必须配置 TLS 终止、APP_ORIGIN、SECURE_COOKIES=true 和适当的绑定地址；当前 Nginx 示例尚未包含证书管理。
+
+<a id="deployment-本地一键启动"></a>
+
+### 本地一键启动
+
+Windows 运行仓库根目录的 start.cmd；Linux/macOS 运行 ./start.sh。两者调用共享的 scripts/start.py，要求 Python 3.12+、Node.js 24+、npm 与 Docker Compose。脚本在 .venv 中安装项目后端依赖，缺少前端 node_modules 时运行 npm ci，准备权限受限的 .env，启动仅映射到127.0.0.1的PostgreSQL，等待数据库就绪后执行 alembic upgrade head，再启动本机FastAPI与Next.js开发服务器。
+
+首次数据库为空时，脚本提示创建用户名和至少14位管理员密码；密码用无回显输入，账号存在或授权策略已初始化后不重置、不重新引导。不会写入样例业务数据，AI保持关闭。服务信息为 http://127.0.0.1:3000 与 http://127.0.0.1:8000/docs；Ctrl+C停止Web/API，Compose PostgreSQL与数据卷保留供下次启动。
+
+此脚本是单机开发/试用入口，使用HTTP和非Secure Cookie，仅绑定回环地址。不能作为局域网/生产安装器；部署到局域网需使用Compose部署流程、TLS、准确的APP_ORIGIN、Secure Cookie及生产密钥配置。Windows脚本内容目前以代码审查为主，本阶段在macOS只验证POSIX脚本语法与Python编译，未声称完成Windows实机验收。
 
 后端及前端容器使用非root账号。数据库初始化用户当前也是schema所有者，因此尚未满足生产最小权限角色隔离。生产上线前需拆分迁移所有者与应用角色，演练最小权限、恢复与外部审计锚定。
 

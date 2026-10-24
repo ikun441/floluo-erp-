@@ -33,32 +33,17 @@ docker compose exec backend python -m erp.bootstrap --username admin
 
 初始化脚本生成随机数据库密码，已有 .env 不覆盖。管理员密码通过终端交互输入，至少14字符，无默认账号密码。访问 http://127.0.0.1:8080 。局域网部署前配置 TLS、准确的 APP_ORIGIN 与 Secure Cookie，参见 [部署文档](docx/DEPLOYMENT.md#deployment)。
 
-## 本地开发
+## 一键本地启动
 
-Python 3.12+（本机实际使用3.13），Node.js 24+，PostgreSQL。
+需要 Python 3.12+、Node.js 24+ 和 Docker Compose（用于本机 PostgreSQL）。启动脚本自动创建 .venv、检查/安装后端与前端依赖、准备私有 .env、启动 PostgreSQL、执行 Alembic 迁移；首次运行时交互创建管理员，不导入示例业务数据。
 
-```sh
-uv sync --frozen --extra dev
-```
-
-创建仅本机可读的 .env，设置 DATABASE_URL、APP_ORIGIN=http://127.0.0.1:3000；仅本机 HTTP 开发可设置 SECURE_COOKIES=false。然后：
+Windows 双击 start.cmd，或在终端运行：
 
 ```sh
-uv run alembic upgrade head
-uv run python -m erp.bootstrap --username admin
-uv run uvicorn erp.main:app --host 127.0.0.1 --port 8000 --no-access-log
+./start.sh
 ```
 
-另开终端：
-
-```sh
-cd frontend
-npm ci
-npm run build
-npm start
-```
-
-前端默认连接 http://127.0.0.1:8000 。AI 和消息服务不参与这些启动步骤。
+首次运行会要求输入管理员用户名和至少14位密码。服务就绪后访问 http://127.0.0.1:3000，API 文档位于 http://127.0.0.1:8000/docs。按 Ctrl+C 停止 API 和前端；PostgreSQL 数据由 Docker volume 持久保存。再次运行会保留数据库与账号。脚本不能覆盖或重置已有账号。局域网/生产部署请按部署说明配置 TLS、可信来源与 Secure Cookie；本地脚本仅绑定回环地址。
 
 ## 验证
 

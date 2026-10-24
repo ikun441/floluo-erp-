@@ -7,7 +7,10 @@ from pathlib import Path
 target = Path(__file__).resolve().parents[1] / ".env"
 fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
 with os.fdopen(fd, "w") as file:
-    file.write("POSTGRES_PASSWORD=" + secrets.token_urlsafe(32) + "\n")
+    password = secrets.token_urlsafe(32)
+    file.write("POSTGRES_PASSWORD=" + password + "\n")
+    file.write("ERP_DB_PORT=5432\n")
+    file.write("DATABASE_URL=postgresql+psycopg://floluo:" + password + "@127.0.0.1:5432/floluo\n")
     file.write(
         "APP_ORIGIN=http://127.0.0.1:8080\nSECURE_COOKIES=false\nERP_BIND_ADDRESS=127.0.0.1\n"
     )

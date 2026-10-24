@@ -16,6 +16,7 @@ services:
       POSTGRES_USER: floluo
       POSTGRES_DB: floluo
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env first}
+    ports: ["127.0.0.1:${ERP_DB_PORT:-5432}:5432"]
     volumes: ["postgres_data:/var/lib/postgresql/data"]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U floluo -d floluo"]

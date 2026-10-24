@@ -10,7 +10,9 @@
 
 ## 未发布
 
-暂无已登记的未发布变更。
+- 新增Windows start.cmd、Linux/macOS start.sh及共享启动协调器：检查Python/Node版本，在.venv安装后端依赖，按需安装前端锁定依赖；准备本机私有环境、检查/启动PostgreSQL、执行迁移并仅在空库交互式创建管理员，再启动API/Web并显示地址。回环绑定、AI默认关闭、已有账号/策略不重置，数据库卷保留。
+- Compose PostgreSQL增加默认回环宿主机端口映射供本地venv服务访问；新增.env本地DATABASE_URL和端口。根README与部署文档补充跨平台入口、安全边界和操作方式。
+- 待验证：Windows实机启动、Docker Compose启动及依赖下载网络；当前环境无Docker，不能声称完整服务脚本端到端通过。
 
 <a id="v110"></a>
 
